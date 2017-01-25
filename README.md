@@ -2,7 +2,7 @@
 
 Modal synthesis represented as coupled feedback loops.
 
-Live at subtleblank.com
+(soon to be) Live at subtleblank.com
 
 ## License
 
