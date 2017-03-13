@@ -7,7 +7,8 @@
     background-color: red;
     position: absolute;
     left: 60vw;
-    width: 10vw;
+    width: 2.7vw;
+    cursor: pointer;
 }
 
 #channel1 {

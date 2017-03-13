@@ -21,7 +21,6 @@
 
 (defmulti draw :type)
 
-
 (defn draw-standard [fader]
   (let [fader-width (dommy/px (:box fader) :width)
         handle-pos (* @(:state fader) fader-width)]
@@ -32,14 +31,11 @@
                 :left
                 (str (+ handle-pos 1) "px"))))
 
-
 (defmethod draw "Gain" [fader]
   (draw-standard fader))
 
-
 (defmethod draw "Delay" [fader]
   (draw-standard fader))
-
 
 (defmethod draw "Bandpass" [bp]
   (let [fader-width (dommy/px (:box bp) :width)
@@ -133,6 +129,7 @@
 (defn init [fader]
   (draw fader)   
   (mouse-control (:handle fader) (:state fader) (:chan fader))
+  (reset! (:state fader) @(:state fader))
   (go (while true
              (let [new-level (<! (:chan fader))]
                (reset! (:state fader) new-level)
@@ -141,6 +138,8 @@
 
 (defn init-bandpass [bp]
     (draw bp)
+    (reset! (:state-lower bp) @(:state-lower bp))
+    (reset! (:state-upper bp) @(:state-upper bp))
     ; process to update lower cutoff
     (go (while true
                 (let [new-level (<! (:chan-lower bp))
