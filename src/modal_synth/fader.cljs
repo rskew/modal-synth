@@ -39,17 +39,17 @@
 
 (defmethod draw "Bandpass" [bp]
   (let [fader-width (dommy/px (:box bp) :width)
-        handle-width (dommy/px (:handle-lower bp) :width)
-        handle-lower-pos (* @(:state-lower bp) fader-width)
-        handle-upper-pos (* @(:state-upper bp) fader-width)
-        bar-left (+ handle-lower-pos handle-width 1)
-        bar-right (- handle-upper-pos 1)]
-    (set-style! (:handle-lower bp)
+        handle-width (dommy/px (:handle-highpass bp) :width)
+        handle-highpass-pos (* @(:state-highpass bp) fader-width)
+        handle-lowpass-pos (* @(:state-lowpass bp) fader-width)
+        bar-left (+ handle-highpass-pos handle-width 1)
+        bar-right (- handle-lowpass-pos 1)]
+    (set-style! (:handle-highpass bp)
                 :left
-                (str handle-lower-pos "px"))
-    (set-style! (:handle-upper bp)
+                (str handle-highpass-pos "px"))
+    (set-style! (:handle-lowpass bp)
                 :left
-                (str handle-upper-pos "px"))
+                (str handle-lowpass-pos "px"))
     (set-style! (:bar bp)
                 :left
                 (str bar-left "px")
@@ -112,17 +112,17 @@
      :type fader-type}))
 
 
-(defn create-bandpass [elements state-lower state-upper]
-  (let [receive-chan-lower (chan)
-        receive-chan-upper (chan)]
-    {:state-lower state-lower
-     :state-upper state-upper
-     :chan-lower receive-chan-lower
-     :chan-upper receive-chan-upper
+(defn create-bandpass [elements state-highpass state-lowpass]
+  (let [receive-chan-highpass (chan)
+        receive-chan-lowpass (chan)]
+    {:state-highpass state-highpass
+     :state-lowpass state-lowpass
+     :chan-highpass receive-chan-highpass
+     :chan-lowpass receive-chan-lowpass
      :bar (:bar elements)
      :box (:box elements)
-     :handle-lower (:handle-lower elements)
-     :handle-upper (:handle-upper elements)
+     :handle-highpass (:handle-highpass elements)
+     :handle-lowpass (:handle-lowpass elements)
      :type "Bandpass"}))
 
 
@@ -138,25 +138,25 @@
 
 (defn init-bandpass [bp]
     (draw bp)
-    (reset! (:state-lower bp) @(:state-lower bp))
-    (reset! (:state-upper bp) @(:state-upper bp))
-    ; process to update lower cutoff
+    (reset! (:state-highpass bp) @(:state-highpass bp))
+    (reset! (:state-lowpass bp) @(:state-lowpass bp))
+    ; process to update highpass cutoff
     (go (while true
-                (let [new-level (<! (:chan-lower bp))
-                      lower-max (- @(:state-upper bp) bandpass-min-bandwidth)]
-                  (if (< new-level lower-max)
-                    (reset! (:state-lower bp) new-level)
-                    (reset! (:state-lower bp) lower-max))
+                (let [new-level (<! (:chan-highpass bp))
+                      highpass-max (- @(:state-lowpass bp) bandpass-min-bandwidth)]
+                  (if (< new-level highpass-max)
+                    (reset! (:state-highpass bp) new-level)
+                    (reset! (:state-highpass bp) highpass-max))
                   (draw bp))))
-     ; process to update upper cutoff
+     ; process to update lowpass cutoff
      (go (while true
-                 (let [new-level (<! (:chan-upper bp))
-                       upper-min (+ @(:state-lower bp) bandpass-min-bandwidth)]
-                   (if (> new-level upper-min)
-                     (reset! (:state-upper bp) new-level)
-                     (reset! (:state-upper bp) upper-min))
+                 (let [new-level (<! (:chan-lowpass bp))
+                       lowpass-min (+ @(:state-highpass bp) bandpass-min-bandwidth)]
+                   (if (> new-level lowpass-min)
+                     (reset! (:state-lowpass bp) new-level)
+                     (reset! (:state-lowpass bp) lowpass-min))
                    (draw bp))))
-     (mouse-control (:handle-lower bp) (:state-lower bp) (:chan-lower bp))
-     (mouse-control (:handle-upper bp) (:state-upper bp) (:chan-upper bp))
-     (mouse-control (:bar bp) (:state-lower bp) (:chan-lower bp))
-     (mouse-control (:bar bp) (:state-upper bp) (:chan-upper bp)))  
+     (mouse-control (:handle-highpass bp) (:state-highpass bp) (:chan-highpass bp))
+     (mouse-control (:handle-lowpass bp) (:state-lowpass bp) (:chan-lowpass bp))
+     (mouse-control (:bar bp) (:state-highpass bp) (:chan-highpass bp))
+     (mouse-control (:bar bp) (:state-lowpass bp) (:chan-lowpass bp)))  

@@ -103,7 +103,7 @@
     margin: 0 8px 0 8px;
 }
 
-.bandpass-handle-lower {
+.bandpass-handle-highpass {
   width: 12px;
   height: 30px;
   position: absolute;
@@ -117,7 +117,7 @@
   cursor: pointer;
 }
 
-.bandpass-handle-lower-vert {
+.bandpass-handle-highpass-vert {
     position: absolute;
     background-color: #777777;
     z-index: 20;
@@ -125,7 +125,7 @@
     height: 100%
 }
 
-.bandpass-handle-lower-horiz {
+.bandpass-handle-highpass-horiz {
     position: absolute;
     background-color: #777777;
     z-index: 20;
@@ -135,7 +135,7 @@
     top: 21px;
 }
 
-.bandpass-handle-upper {
+.bandpass-handle-lowpass {
   width: 12px;
   height: 30px;
   position: absolute;
@@ -149,7 +149,7 @@
   cursor: pointer;
 }
 
-.bandpass-handle-upper-vert {
+.bandpass-handle-lowpass-vert {
     position: absolute;
     background-color: #777777;
     z-index: 20;
@@ -157,7 +157,7 @@
     height: 100%
 }
 
-.bandpass-handle-upper-horiz {
+.bandpass-handle-lowpass-horiz {
     position: absolute;
     background-color: #777777;
     z-index: 20;

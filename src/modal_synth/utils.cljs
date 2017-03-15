@@ -16,3 +16,16 @@
 (defn set-html! [html-object & html]
   (set! (.-innerHTML html-object)
         (apply str html)))
+
+
+(defn smooth-array! [array uptake gain]
+  (dotimes [i (- (count array) 1)]
+    (let [prev-element (aget array i)
+          element (aget array (+ i 1))]
+      (aset array (+ i 1)
+            (-> element
+                (* uptake)
+                (+ prev-element)
+                (/ (+ uptake 1.0))))))
+  (dotimes [i (count array)]
+    (aset array i (* (aget array i) gain))))

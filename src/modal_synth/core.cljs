@@ -11,12 +11,15 @@
             [cljs.core.async :refer [<! >! put! chan close! alts!]]))
 
 
-;noise burst
-;filters
-;master channel spectrum vis
-;button to fire noise shot to ring synth
-;channel spectrum vis
+(def gain-multiplier 1)
+(def delay-time-multiplier 0.05)
+(def lowpass-cutoff-multiplier 20000)
+(def highpass-cutoff-multiplier 20000)
+
+;speed up noise burst fire
 ;reverb
+;master channel spectrum vis
+;channel spectrum vis
 ;save states
 ;morph between states
 ; - morph time
@@ -26,7 +29,7 @@
 ;build dom in clojurescript
 ;signal flow shown visually
 ;(no sequencer vis, only go by feel)
-;put audio stuff in namespace
+;control system to regulate amplitude between decay/saturation
 
 
 (enable-console-print!)
@@ -41,8 +44,8 @@
 (defn select-bandpass [index channel-node]
   {:box (sel1 channel-node (keyword (str "#bandpass" index)))
    :bar (sel1 channel-node (keyword (str "#bandpass-bar" index)))
-   :handle-lower (sel1 channel-node (keyword (str "#bandpass-handle-lower" index)))
-   :handle-upper (sel1 channel-node (keyword (str "#bandpass-handle-upper" index)))}) 
+   :handle-highpass (sel1 channel-node (keyword (str "#bandpass-handle-highpass" index))) 
+   :handle-lowpass (sel1 channel-node (keyword (str "#bandpass-handle-lowpass" index)))})
 
 
 (defn select-channel [index]
@@ -61,8 +64,8 @@
                                   (:delay channel-state)
                                   "Delay")
         bandpass (fader/create-bandpass (:bandpass channel-elements)
-                                        (:lower-cutoff channel-state)
-                                        (:upper-cutoff channel-state))]
+                                        (:highpass-cutoff channel-state)
+                                        (:lowpass-cutoff channel-state))]
     (fader/init gain-fader)
     (fader/init delay-fader)
     (fader/init-bandpass bandpass)))
@@ -73,20 +76,37 @@
 
 (defn make-channel-audio []
   (let [delay-line (webaudio/make-delay-line 2.0 audio-context)
-        gain (webaudio/make-gain 0.1 audio-context)]
-    {:graph (webaudio/connect delay-line gain)
+        gain (webaudio/make-gain 0.1 audio-context)
+        bandpass (webaudio/make-bandpass 0.4 0.5 audio-context)]
+    {:graph (reduce webaudio/connect [delay-line bandpass gain])
      :gain-graph gain
-     :delay-graph delay-line}))
+     :delay-graph delay-line
+     :bandpass-graph bandpass}))
 
 
 (defn gain-mapping [fader-level]
   "Maps the fader levels to appropriate gain levels"
-  fader-level)
+  (* fader-level gain-multiplier))
 
 
 (defn delay-mapping [fader-level]
   "Maps the fader levels to appropriate delay time levels"
-  (* 2 fader-level))
+  (* fader-level delay-time-multiplier))
+
+
+(defn lowpass-cutoff-mapping [fader-level]
+  "Maps the fader levels to appropriate lowpass cutoff levels"
+  (* fader-level lowpass-cutoff-multiplier))
+
+
+(defn highpass-cutoff-mapping [fader-level]
+  "Maps the fader levels to appropriate highpass cutoff levels"
+  (* fader-level highpass-cutoff-multiplier))
+
+
+(defn make-watcher [graph setter mapping]
+  (fn [key atom old-state new-state]
+      (setter graph (mapping new-state))))
 
 
 (defn make-gain-watcher-fn [gain]
@@ -99,6 +119,35 @@
       (webaudio/set-delay-time! delay-line (delay-mapping new-state))))
 
 
+(defn init-channel-state [gain delay-time highpass-cutoff lowpass-cutoff
+                          channel-audio]
+  (let [channel-state {:gain (atom gain)
+                       :delay (atom delay-time)
+                       :highpass-cutoff(atom highpass-cutoff)
+                       :lowpass-cutoff (atom lowpass-cutoff)}]
+    (add-watch (:gain channel-state)
+               :gain-watcher
+               (make-watcher (:gain-graph channel-audio)
+                             webaudio/set-gain!
+                             gain-mapping)) 
+    (add-watch (:delay channel-state)
+               :delay-watcher
+               (make-watcher (:delay-graph channel-audio)
+                             webaudio/set-delay-time!
+                             delay-mapping))  
+    (add-watch (:lowpass-cutoff channel-state)
+               :lowpass-cutoff-watcher
+               (make-watcher (:bandpass-graph channel-audio)
+                             webaudio/set-lowpass-cutoff!
+                             lowpass-cutoff-mapping))  
+    (add-watch (:highpass-cutoff channel-state)
+               :highpass-cutoff-watcher
+               (make-watcher (:bandpass-graph channel-audio)
+                             webaudio/set-highpass-cutoff!
+                             highpass-cutoff-mapping))  
+    channel-state))
+
+
 (defn init []
   (let [channel1-elements (select-channel "1")
         channel1-audio (make-channel-audio)
@@ -106,49 +155,26 @@
         channel2-audio (make-channel-audio)
         channel-master-elements (select-channel "-master")
         channel-master-audio (make-channel-audio)]
-    (defonce channel1-state {:gain (atom 0.6)
-                             :delay (atom 0.4)
-                             :lower-cutoff (atom 0.4)
-                             :upper-cutoff(atom 0.9)})
-    (add-watch (:gain channel1-state)
-               :gain-watcher1
-               (make-gain-watcher-fn (:gain-graph channel1-audio))) 
-    (add-watch (:delay channel1-state)
-               :delay-watcher1
-               (make-delay-watcher-fn (:delay-graph channel1-audio))) 
-    (defonce channel2-state {:gain (atom 0.2)
-                             :delay (atom 0.3)
-                             :lower-cutoff (atom 0.4)
-                             :upper-cutoff(atom 0.5)})
-    (add-watch (:gain channel2-state)
-               :gain-watcher2
-               (make-gain-watcher-fn (:gain-graph channel2-audio))) 
-    (add-watch (:delay channel2-state)
-               :delay-watcher2
-               (make-delay-watcher-fn (:delay-graph channel2-audio))) 
-    (defonce channel-master-state {:gain (atom 0.7)
-                                   :delay (atom 0.4)
-                                   :lower-cutoff (atom 0.1)
-                                   :upper-cutoff(atom 0.5)})
-    (add-watch (:gain channel-master-state)
-               :gain-watcher-master
-               (make-gain-watcher-fn (:gain-graph channel-master-audio))) 
-    (add-watch (:delay channel-master-state)
-               :delay-watcher-master
-               (make-delay-watcher-fn (:delay-graph channel-master-audio))) 
+    (defonce channel1-state (init-channel-state 0.7 0.28 0.4 0.9
+                                                channel1-audio))
+    (defonce channel2-state (init-channel-state 0.6 0.17 0.4 0.5
+                                                channel2-audio))
+    (defonce channel-master-state (init-channel-state 0.4 0.0 0.1 0.5
+                                                      channel-master-audio))
 
     (defonce master-fanin (webaudio/fanin (:graph channel-master-audio)))
     (defonce master-fanout (webaudio/fanout (:graph channel-master-audio)))
-    (webaudio/connect [(:graph channel1-audio) (:graph channel2-audio)] master-fanin)
-    (webaudio/connect master-fanout (webaudio/destination audio-context))
 
+    (webaudio/connect [(:graph channel1-audio) (:graph channel2-audio)] master-fanin)
     (webaudio/connect master-fanout [(:graph channel1-audio) (:graph channel2-audio)])
+    (webaudio/connect master-fanout (webaudio/destination audio-context))
 
     (defn fire-noise-callback [event]
       (webaudio/fire-noise-burst-through [(:graph channel1-audio) (:graph channel2-audio)]
-                                 200
+                                 600
                                  audio-context))
     (events/listen (sel1 :#fire-note) "mousedown" fire-noise-callback)
+    (events/listen js/window "keydown" fire-noise-callback)
 
     (make-channel channel1-elements
                   channel1-state)
@@ -157,4 +183,4 @@
     (make-channel channel-master-elements
                   channel-master-state)))
 
-(init)
+(defonce initialise-the-thing (init))

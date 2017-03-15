@@ -1,20 +1,8 @@
 (ns modal-synth.webaudio
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
-  (:require [cljs.core.async :refer [<! >! put! chan close! alts!]]))
+  (:require [cljs.core.async :refer [<! >! put! chan close! alts!]]
+            [modal-synth.utils :refer [smooth-array!]]))
 
-
-; types (maps):
-;  - gain-node {:type "gain-node" :node node}
-;  - delay-node
-;  - subgraph {:type "subgraph" :input node :output node}
-
-;use multi-methods for connect
-
-;multi methods for 'setValue'
-
-;is there a way to keep the implementation totally abstracted?
-; - dont expose how to make and change the maps for objects
-; - change to protocol from multimethods later
 
 (defn create-audio-context []
   (if js/window.AudioContext.
@@ -30,6 +18,33 @@
   {:input-node (.-destination audio-context)
    :output-node nil
    :type :Fanin})
+
+
+(defn fanout [graph]
+  (assoc graph :type :Fanout))
+
+
+(defn fanin [graph]
+  (assoc graph :type :Fanin))
+
+
+(defmulti connect (fn [graph1 graph2] [(:type graph1) (:type graph2)]))
+
+(defmethod connect [:Fanout nil] [fanout sink-graphs]
+  (doseq [source [fanout]
+          sink sink-graphs]
+         (connect source sink)))
+
+(defmethod connect [nil :Fanin] [source-graphs fanin]
+  (doseq [source source-graphs
+          sink [fanin]]
+         (connect source sink)))
+
+(defmethod connect :default [source-graph sink-graph]
+  (.connect (:output-node source-graph) (:input-node sink-graph))
+  {:input-node (:input-node source-graph)
+   :output-node (:output-node sink-graph)
+   :type :Graph})
 
 
 (defn set-gain! [gain-graph new-gain]
@@ -74,7 +89,7 @@
     (-> osc-node
         .-type
         (set! osc-type))
-    {:input-node osc-node
+    {:input-node nil
      :output-node osc-node
      :type :Osc
      :node osc-node}))
@@ -88,39 +103,95 @@
   (.stop (:node osc) stop-time))
 
 
-(defn fanout [graph]
-  (assoc graph :type :Fanout))
+(defn make-bandpass [highpass-cutoff lowpass-cutoff audio-context]
+  (let [highpass-node (.createBiquadFilter audio-context)
+        lowpass-node (.createBiquadFilter audio-context)
+        Q-val 1e-255]
+    (doto highpass-node
+          (-> .-type (set! "highpass"))
+          (-> .-frequency .-value (set! highpass-cutoff))
+          (-> .-Q .-value (set! Q-val)))  
+    (doto lowpass-node
+          (-> .-type (set! "lowpass"))
+          (-> .-frequency .-value (set! lowpass-cutoff))
+          (-> .-Q .-value (set! Q-val))) 
+    (.connect lowpass-node highpass-node)
+    {:input-node lowpass-node
+     :output-node highpass-node
+     :type :Bandpass
+     :lowpass-node lowpass-node
+     :highpass-node highpass-node
+     :lowpass-cutoff lowpass-cutoff
+     :highpass-cutoff highpass-cutoff}))
 
 
-(defn fanin [graph]
-  (assoc graph :type :Fanin))
+(defn set-lowpass-cutoff! [bandpass new-lowpass-cutoff]
+  (print "setting lowpass to " new-lowpass-cutoff)
+  (-> bandpass
+      :lowpass-node
+      .-frequency
+      .-value
+      (set! new-lowpass-cutoff)))
 
 
-(defmulti connect (fn [graph1 graph2] [(:type graph1) (:type graph2)]))
+(defn set-highpass-cutoff! [bandpass new-highpass-cutoff]
+  (print "setting highpass to " new-highpass-cutoff)
+  (-> bandpass
+      :highpass-node
+      .-frequency
+      .-value
+      (set! new-highpass-cutoff)))
 
-(defmethod connect [:Fanout nil] [fanout sink-graphs]
-  (doseq [source [fanout]
-          sink sink-graphs]
-         (connect source sink)))
 
-(defmethod connect [nil :Fanin] [source-graphs fanin]
-  (doseq [source source-graphs
-          sink [fanin]]
-         (connect source sink)))
+(defn make-noise-buffer [length audio-context & {:keys [noise-type]}]
+  (let [buffer-size (* length (.-sampleRate audio-context))
+        noise-buffer (.createBuffer audio-context 1 buffer-size (.-sampleRate audio-context))
+        noise-buffer-data (.getChannelData noise-buffer 0)
+        generate-noise-sample (fn [] (-> (rand) (* 2) (- 1)))]
+    (cond
+      (= noise-type :brownian)
+      (do
+        (dotimes [i buffer-size]
+          (let [prev-sample (aget noise-buffer-data i)
+                uptake 0.03
+                filtered-sample (-> (generate-noise-sample)
+                                    (* uptake)
+                                    (+ prev-sample)
+                                    (/ (+ 1.0 uptake)))]
+            (aset noise-buffer-data (+ i 1) filtered-sample)))
+        (dotimes [i buffer-size]
+          (let [sample (aget noise-buffer-data i)
+                makeup-gain 3.5]
+            (aset noise-buffer-data i (* sample makeup-gain)))))
+      :default
+      (dotimes [i buffer-size]
+        (aset noise-buffer-data i (generate-noise-sample))))
+        
+    noise-buffer))
 
-(defmethod connect :default [source-graph sink-graph]
-  (.connect (:output-node source-graph) (:input-node sink-graph))
-  {:input-node (:input-node source-graph)
-   :output-node (:output-node sink-graph)
-   :type :Graph})
+
+(defn make-noise-osc [audio-context & {:keys [highpass-cutoff lowpass-cutoff]
+                                       :or {highpass-cutoff 0
+                                            lowpass-cutoff 3000}}]
+  (let [noise-buffer (make-noise-buffer 5 audio-context :noise-type :brownian)
+        noise-buffer-source (.createBufferSource audio-context)
+        bandpass (make-bandpass highpass-cutoff lowpass-cutoff audio-context)]
+    (set! (.-buffer noise-buffer-source) noise-buffer)
+    (.connect noise-buffer-source (:input-node bandpass))
+    {:input-node nil
+     :output-node (:output-node bandpass)
+     :type :NoiseOsc
+     :node noise-buffer-source}))
 
 
 (defn fire-noise-burst-through [graphs freq audio-context]
-  (let [osc (make-osc freq audio-context :osc-type "sine")
+  (let [noise-osc (make-noise-osc audio-context
+                                  :highpass-cutoff 30
+                                  :lowpass-cutoff 1800)
         now (now audio-context)]
-    (-> osc
+    (-> noise-osc
         fanout
         (connect graphs))
-    (osc-start osc now)
-    (osc-stop osc (+ now 0.3))
+    (osc-start noise-osc now)
+    (osc-stop noise-osc (+ now 0.025))
     (print "Fire!")))
