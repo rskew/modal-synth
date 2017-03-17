@@ -3,14 +3,6 @@
     --slider-width: 50vw;
 }
 
-#fire-note {
-    background-color: red;
-    position: absolute;
-    left: 60vw;
-    width: 2.7vw;
-    cursor: pointer;
-}
-
 #channel1 {
     position: relative;
     left: 0;

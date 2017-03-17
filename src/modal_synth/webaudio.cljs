@@ -1,6 +1,6 @@
 (ns modal-synth.webaudio
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
-  (:require [cljs.core.async :refer [<! >! put! chan close! alts!]]
+  (:require [cljs.core.async :refer [<! >! put! chan close! alts! poll!]]
             [modal-synth.utils :refer [smooth-array!]]))
 
 
@@ -10,7 +10,7 @@
     (js/window.webkitAudioContext.)))
 
 
-(defn now [audio-context]
+(defn get-now [audio-context]
   (.-currentTime audio-context))
 
 
@@ -47,8 +47,15 @@
    :type :Graph})
 
 
+(defn get-gain [gain-graph]
+  (-> gain-graph
+      :node
+      .-gain))
+
+
 (defn set-gain! [gain-graph new-gain]
-  (-> (:node gain-graph)
+  (-> gain-graph
+      :node
       .-gain
       .-value
       (set! new-gain)))
@@ -184,14 +191,66 @@
      :node noise-buffer-source}))
 
 
+(defn loop-noise-osc [noise-osc]
+  (-> noise-osc
+      :node
+      .-loop
+      (set! "true")))
+
+
 (defn fire-noise-burst-through [graphs freq audio-context]
   (let [noise-osc (make-noise-osc audio-context
                                   :highpass-cutoff 30
                                   :lowpass-cutoff 1800)
-        now (now audio-context)]
+        now (get-now audio-context)]
     (-> noise-osc
         fanout
         (connect graphs))
     (osc-start noise-osc now)
     (osc-stop noise-osc (+ now 0.025))
     (print "Fire!")))
+
+
+(defn make-adsr [attack-time decay-time sustain-level release-time
+                 & {:keys [slope]
+                    :or [:slope :linear]}]
+  {:attack-time attack-time
+   :decay-time decay-time
+   :sustain-level sustain-level
+   :release-time release-time
+   :slope slope})
+
+
+(defn apply-adsr [param adsr noteoff-chan audio-context
+                  & {:keys [start-time-offset start-val attack-peak-val]
+                     :or {start-time-offset 0
+                          start-val 1e-30
+                          attack-peak-val 1}}]
+  (let [now (get-now audio-context)
+        attack-start-time (+ now start-time-offset)
+        decay-start-time (+ attack-start-time (:attack-time adsr))
+        sustain-start-time (+ decay-start-time (:decay-time adsr))
+        slope-func (if (= (:slope adsr) :exponential)
+                     (fn [param new-val at-time] (.exponentialRampToValueAtTime param new-val at-time))
+                     (fn [param new-val at-time] (.linearRampToValueAtTime param new-val at-time)))]
+    (.setValueAtTime param start-val attack-start-time)
+    (slope-func param attack-peak-val decay-start-time)
+    (slope-func param (:sustain-level adsr) sustain-start-time)
+    ;wait for noteoff, then release
+    (go
+      (<! noteoff-chan)
+      (print "noteoff!")
+      (let [now (get-now audio-context)
+            release-end-time (+ now (:release-time adsr))]
+        (slope-func param start-val release-end-time))
+      (while (poll! noteoff-chan)))))
+
+
+(defn apply-ar-envelope [param adsr audio-context
+                         & {:keys [start-time-offset start-val attack-peak-val]
+                            :or {start-time-offset 0
+                                 start-val 1e-30
+                                 attack-peak-val 1}}]
+  (let [noteoff-chan (chan)]
+    (put! noteoff-chan :noteoff)
+    (apply-adsr param adsr noteoff-chan audio-context)))

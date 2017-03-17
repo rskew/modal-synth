@@ -127,36 +127,51 @@
 
 
 (defn init [fader]
-  (draw fader)   
-  (mouse-control (:handle fader) (:state fader) (:chan fader))
-  (reset! (:state fader) @(:state fader))
+  ;re-draw the faders whenever the state is updated,
+  ; by mouse or by automation
+  (add-watch (:state fader)
+             :draw-watcher
+             (fn [key atom old-state new-state]
+                 (draw fader)))
+  ;kick start processes to update the state in response to mouse-move inputs
   (go (while true
              (let [new-level (<! (:chan fader))]
-               (reset! (:state fader) new-level)
-               (draw fader)))))
+               (reset! (:state fader) new-level))))
+  ;kick start processes to listen for mouse inputs
+  (mouse-control (:handle fader) (:state fader) (:chan fader))
+  ;initialise the states to sync up all that depend on them
+  (reset! (:state fader) @(:state fader)))
 
 
 (defn init-bandpass [bp]
-    (draw bp)
-    (reset! (:state-highpass bp) @(:state-highpass bp))
-    (reset! (:state-lowpass bp) @(:state-lowpass bp))
-    ; process to update highpass cutoff
-    (go (while true
-                (let [new-level (<! (:chan-highpass bp))
-                      highpass-max (- @(:state-lowpass bp) bandpass-min-bandwidth)]
-                  (if (< new-level highpass-max)
-                    (reset! (:state-highpass bp) new-level)
-                    (reset! (:state-highpass bp) highpass-max))
-                  (draw bp))))
-     ; process to update lowpass cutoff
-     (go (while true
-                 (let [new-level (<! (:chan-lowpass bp))
-                       lowpass-min (+ @(:state-highpass bp) bandpass-min-bandwidth)]
-                   (if (> new-level lowpass-min)
-                     (reset! (:state-lowpass bp) new-level)
-                     (reset! (:state-lowpass bp) lowpass-min))
-                   (draw bp))))
-     (mouse-control (:handle-highpass bp) (:state-highpass bp) (:chan-highpass bp))
-     (mouse-control (:handle-lowpass bp) (:state-lowpass bp) (:chan-lowpass bp))
-     (mouse-control (:bar bp) (:state-highpass bp) (:chan-highpass bp))
-     (mouse-control (:bar bp) (:state-lowpass bp) (:chan-lowpass bp)))  
+  ;re-draw the faders whenever the state is updated,
+  ; by mouse or by automation
+  (add-watch (:state-highpass bp)
+             :draw-watcher
+             (fn [key atom old-state new-state]
+                 (draw bp)))
+  (add-watch (:state-lowpass bp)
+             :draw-watcher
+             (fn [key atom old-state new-state]
+                 (draw bp)))
+  ;kick start processes to update the state in response to mouse-move inputs
+  (go (while true
+             (let [new-level (<! (:chan-highpass bp))
+                   highpass-max (- @(:state-lowpass bp) bandpass-min-bandwidth)]
+               (if (< new-level highpass-max)
+                 (reset! (:state-highpass bp) new-level)
+                 (reset! (:state-highpass bp) highpass-max)))))
+  (go (while true
+             (let [new-level (<! (:chan-lowpass bp))
+                   lowpass-min (+ @(:state-highpass bp) bandpass-min-bandwidth)]
+               (if (> new-level lowpass-min)
+                 (reset! (:state-lowpass bp) new-level)
+                 (reset! (:state-lowpass bp) lowpass-min)))))
+  ;kick start processes to listen for mouse inputs
+  (mouse-control (:handle-highpass bp) (:state-highpass bp) (:chan-highpass bp))
+  (mouse-control (:handle-lowpass bp) (:state-lowpass bp) (:chan-lowpass bp))
+  (mouse-control (:bar bp) (:state-highpass bp) (:chan-highpass bp))
+  (mouse-control (:bar bp) (:state-lowpass bp) (:chan-lowpass bp))
+  ;initialise the states to sync up all that depend on them
+  (reset! (:state-highpass bp) @(:state-highpass bp))
+  (reset! (:state-lowpass bp) @(:state-lowpass bp)))

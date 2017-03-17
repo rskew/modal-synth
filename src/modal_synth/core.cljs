@@ -1,10 +1,11 @@
 (ns modal-synth.core
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
   (:require [modal-synth.utils :refer [listen
-                                       set-html! ]]
+                                       set-html!]]
             [modal-synth.layout :refer [layout-params]]
             [modal-synth.fader :as fader]
             [modal-synth.webaudio :as webaudio]
+            [modal-synth.keyboard-control :as keyboard-control]
             [goog.dom :as dom]
             [goog.events :as events]
             [dommy.core :as dommy :refer [sel1]]
@@ -13,10 +14,13 @@
 
 (def gain-multiplier 1)
 (def delay-time-multiplier 0.05)
-(def lowpass-cutoff-multiplier 20000)
-(def highpass-cutoff-multiplier 20000)
+(def lowpass-cutoff-upper-bound 20000)
+(def highpass-cutoff-upper-bound 20000)
 
-;speed up noise burst fire
+;stop key repeat
+;make reloadable
+;adsr keyboard
+; - with sliders for a, d, s, r
 ;reverb
 ;master channel spectrum vis
 ;channel spectrum vis
@@ -30,6 +34,8 @@
 ;signal flow shown visually
 ;(no sequencer vis, only go by feel)
 ;control system to regulate amplitude between decay/saturation
+;animate faders
+; - sin wave slow perturbation to all params
 
 
 (enable-console-print!)
@@ -94,29 +100,22 @@
   (* fader-level delay-time-multiplier))
 
 
-(defn lowpass-cutoff-mapping [fader-level]
-  "Maps the fader levels to appropriate lowpass cutoff levels"
-  (* fader-level lowpass-cutoff-multiplier))
-
-
 (defn highpass-cutoff-mapping [fader-level]
   "Maps the fader levels to appropriate highpass cutoff levels"
-  (* fader-level highpass-cutoff-multiplier))
+  (Math/pow highpass-cutoff-upper-bound
+            fader-level)) 
+
+
+(defn lowpass-cutoff-mapping [fader-level]
+  "Maps the fader levels to appropriate lowpass cutoff levels"
+  (print "updating lowpass cutoff with fader level " fader-level)
+  (Math/pow lowpass-cutoff-upper-bound
+            fader-level))
 
 
 (defn make-watcher [graph setter mapping]
   (fn [key atom old-state new-state]
       (setter graph (mapping new-state))))
-
-
-(defn make-gain-watcher-fn [gain]
-  (fn [key atom old-state new-state]
-      (webaudio/set-gain! gain new-state)))
-
-
-(defn make-delay-watcher-fn [delay-line]
-  (fn [key atom old-state new-state]
-      (webaudio/set-delay-time! delay-line (delay-mapping new-state))))
 
 
 (defn init-channel-state [gain delay-time highpass-cutoff lowpass-cutoff
@@ -148,39 +147,56 @@
     channel-state))
 
 
-(defn init []
-  (let [channel1-elements (select-channel "1")
-        channel1-audio (make-channel-audio)
-        channel2-elements (select-channel "2")
-        channel2-audio (make-channel-audio)
-        channel-master-elements (select-channel "-master")
-        channel-master-audio (make-channel-audio)]
-    (defonce channel1-state (init-channel-state 0.7 0.28 0.4 0.9
-                                                channel1-audio))
-    (defonce channel2-state (init-channel-state 0.6 0.17 0.4 0.5
-                                                channel2-audio))
-    (defonce channel-master-state (init-channel-state 0.4 0.0 0.1 0.5
-                                                      channel-master-audio))
+(defonce channel1-elements (select-channel "1"))
+(defonce channel1-audio (make-channel-audio))
+(defonce channel2-elements (select-channel "2"))
+(defonce channel2-audio (make-channel-audio))
+(defonce channel-master-elements (select-channel "-master"))
+(defonce channel-master-audio (make-channel-audio))
+(defonce channel1-state (init-channel-state 0.7 0.28 0.4 0.9
+                                             channel1-audio))
+(defonce channel2-state (init-channel-state 0.6 0.17 0.4 0.5
+                                             channel2-audio))
+(defonce channel-master-state (init-channel-state 0.4 0.0 0.1 0.5
+                                                   channel-master-audio))
 
-    (defonce master-fanin (webaudio/fanin (:graph channel-master-audio)))
-    (defonce master-fanout (webaudio/fanout (:graph channel-master-audio)))
+(defonce master-fanin (webaudio/fanin (:graph channel-master-audio)))
+(defonce master-fanout (webaudio/fanout (:graph channel-master-audio)))
 
-    (webaudio/connect [(:graph channel1-audio) (:graph channel2-audio)] master-fanin)
-    (webaudio/connect master-fanout [(:graph channel1-audio) (:graph channel2-audio)])
-    (webaudio/connect master-fanout (webaudio/destination audio-context))
+(webaudio/connect [(:graph channel1-audio) (:graph channel2-audio)]
+                   master-fanin)
+(webaudio/connect master-fanout
+                   [(:graph channel1-audio) (:graph channel2-audio)])
+(webaudio/connect master-fanout
+                   (webaudio/destination audio-context))
 
-    (defn fire-noise-callback [event]
-      (webaudio/fire-noise-burst-through [(:graph channel1-audio) (:graph channel2-audio)]
-                                 600
-                                 audio-context))
-    (events/listen (sel1 :#fire-note) "mousedown" fire-noise-callback)
-    (events/listen js/window "keydown" fire-noise-callback)
+(defonce noise-osc (webaudio/make-noise-osc audio-context
+                                             :highpass-cutoff 30
+                                             :lowpass-cutoff 1800))
+(defonce noise-gain (webaudio/make-gain 0 audio-context))
+(-> noise-osc
+     (webaudio/connect noise-gain)
+     webaudio/fanout
+     (webaudio/connect [(:graph channel1-audio) (:graph channel2-audio)]))
+(webaudio/loop-noise-osc noise-osc)
+(webaudio/osc-start noise-osc (webaudio/get-now audio-context))
+(defonce noise-gain-state (atom 0))
+(add-watch noise-gain-state
+           :noise-gain-watcher
+           (make-watcher noise-osc
+                         webaudio/set-gain!
+                         identity))
 
-    (make-channel channel1-elements
-                  channel1-state)
-    (make-channel channel2-elements
-                  channel2-state)
-    (make-channel channel-master-elements
-                  channel-master-state)))
+(make-channel channel1-elements
+               channel1-state)
+(make-channel channel2-elements
+               channel2-state)
+(make-channel channel-master-elements
+              channel-master-state)
 
-(defonce initialise-the-thing (init))
+(keyboard-control/init {:channel1-state channel1-state
+                        :channel2-state channel2-state
+                        :channel-master-state channel-master-state
+                        :noise-gain-state noise-gain-state
+                        :noise-gain noise-gain
+                        :audio-context audio-context})
