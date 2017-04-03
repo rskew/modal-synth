@@ -2,79 +2,61 @@
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
   (:require [modal-synth.utils :refer [listen
                                        set-html!]]
-            [modal-synth.layout :refer [layout-params]]
+            [modal-synth.channel-dom :as channel-dom]
             [modal-synth.fader :as fader]
             [modal-synth.webaudio :as webaudio]
             [modal-synth.keyboard-control :as keyboard-control]
             [goog.dom :as dom]
             [goog.events :as events]
-            [dommy.core :as dommy :refer [sel1]]
+            [dommy.core :as dommy :refer [sel1 append! parent replace!]]
             [cljs.core.async :refer [<! >! put! chan close! alts!]]))
 
 
-(def gain-multiplier 1)
-(def delay-time-multiplier 0.05)
-(def lowpass-cutoff-upper-bound 20000)
-(def highpass-cutoff-upper-bound 20000)
+;try compressor on master only
 
-;stop key repeat
-;make reloadable
+;keyboard control
+;select fader w keyboard
+; - highlight
+; - send to pos
+;send fader to pos over time
+; - setInterval()
+;reverb
 ;adsr keyboard
 ; - with sliders for a, d, s, r
-;reverb
 ;master channel spectrum vis
 ;channel spectrum vis
 ;save states
 ;morph between states
 ; - morph time
 ; - morph curve (eg linear, step)
-;keyboard control
 
-;build dom in clojurescript
+;make it live at subtleblank.com
+
 ;signal flow shown visually
 ;(no sequencer vis, only go by feel)
 ;control system to regulate amplitude between decay/saturation
 ;animate faders
 ; - sin wave slow perturbation to all params
+;event oscillator
+; - polyrythms?
+;'clocks' multiple cycles, all tick together but have different number of positions
+; - direct product of cyclic groups
+;   - discrete motion
+; - need a way of setting clocks
+; - directly move corresponding fader
+;   - ticking from low to high?
+;   - or make arbitrary sequence?
+;   - need a way to specify fader positions without actuating it and capturing new state
+;     - 'send to pos' same problem
+;chopper/tremolo (discourse)
+
+(def gain-multiplier 1)
+(def delay-time-multiplier 0.05)
+(def lowpass-cutoff-upper-bound 20000)
+(def highpass-cutoff-upper-bound 20000)
 
 
 (enable-console-print!)
-
-
-(defn select-fader [index channel-node]
-  {:box (sel1 channel-node (keyword (str "#slider" index)))
-   :bar (sel1 channel-node (keyword (str "#slider-bar" index)))
-   :handle (sel1 channel-node (keyword (str "#slider-handle" index)))})
-
-
-(defn select-bandpass [index channel-node]
-  {:box (sel1 channel-node (keyword (str "#bandpass" index)))
-   :bar (sel1 channel-node (keyword (str "#bandpass-bar" index)))
-   :handle-highpass (sel1 channel-node (keyword (str "#bandpass-handle-highpass" index))) 
-   :handle-lowpass (sel1 channel-node (keyword (str "#bandpass-handle-lowpass" index)))})
-
-
-(defn select-channel [index]
-  (let [channel-node (sel1 (keyword (str "#channel" index)))]
-    {:gain-fader (select-fader "-gain" channel-node)
-     :delay-fader (select-fader "-delay" channel-node)
-     :bandpass (select-bandpass "1" channel-node)}))
-
-
-(defn make-channel [channel-elements
-                    channel-state]
-  (let [gain-fader (fader/create (:gain-fader channel-elements)
-                                 (:gain channel-state)
-                                 "Gain")
-        delay-fader (fader/create (:delay-fader channel-elements)
-                                  (:delay channel-state)
-                                  "Delay")
-        bandpass (fader/create-bandpass (:bandpass channel-elements)
-                                        (:highpass-cutoff channel-state)
-                                        (:lowpass-cutoff channel-state))]
-    (fader/init gain-fader)
-    (fader/init delay-fader)
-    (fader/init-bandpass bandpass)))
 
 
 (defonce audio-context (webaudio/create-audio-context))
@@ -83,9 +65,16 @@
 (defn make-channel-audio []
   (let [delay-line (webaudio/make-delay-line 2.0 audio-context)
         gain (webaudio/make-gain 0.1 audio-context)
+        compressor (webaudio/make-compressor audio-context
+                                             :ratio 4
+                                             :threshold -12
+                                             :attack 0
+                                             :release 0
+                                             )
         bandpass (webaudio/make-bandpass 0.4 0.5 audio-context)]
-    {:graph (reduce webaudio/connect [delay-line bandpass gain])
+    {:graph (reduce webaudio/connect [delay-line bandpass gain compressor])
      :gain-graph gain
+     :compressor-graph compressor
      :delay-graph delay-line
      :bandpass-graph bandpass}))
 
@@ -147,39 +136,97 @@
     channel-state))
 
 
-(defonce channel1-elements (select-channel "1"))
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;; Make the channels
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defonce channel1-audio (make-channel-audio))
-(defonce channel2-elements (select-channel "2"))
-(defonce channel2-audio (make-channel-audio))
-(defonce channel-master-elements (select-channel "-master"))
-(defonce channel-master-audio (make-channel-audio))
-(defonce channel1-state (init-channel-state 0.7 0.28 0.4 0.9
+(defonce channel1-state (init-channel-state 0.3 0 0 1
                                              channel1-audio))
-(defonce channel2-state (init-channel-state 0.6 0.17 0.4 0.5
+(def channel1 (channel-dom/create (:gain channel1-state)
+                                  (:delay channel1-state)
+                                  (:highpass-cutoff channel1-state)
+                                  (:lowpass-cutoff channel1-state)
+                                  "channel1"))
+(def divider1 (channel-dom/create-divider "divider1"))
+(channel-dom/add-to (sel1 :body) divider1)
+
+
+(defonce channel2-audio (make-channel-audio))
+(defonce channel2-state (init-channel-state 0.3 0 0 1
                                              channel2-audio))
-(defonce channel-master-state (init-channel-state 0.4 0.0 0.1 0.5
+(def channel2 (channel-dom/create (:gain channel2-state)
+                                  (:delay channel2-state)
+                                  (:highpass-cutoff channel2-state)
+                                  (:lowpass-cutoff channel2-state)
+                                  "channel2"))
+(def divider2 (channel-dom/create-divider "divider2"))
+(channel-dom/add-to (sel1 :body) divider2)
+
+
+(defonce channel3-audio (make-channel-audio))
+(defonce channel3-state (init-channel-state 0.3 0 0 1
+                                             channel3-audio))
+(def channel3 (channel-dom/create (:gain channel3-state)
+                                  (:delay channel3-state)
+                                  (:highpass-cutoff channel3-state)
+                                  (:lowpass-cutoff channel3-state)
+                                  "channel3"))
+(def divider3 (channel-dom/create-divider "divider3"))
+(channel-dom/add-to (sel1 :body) divider3)
+
+
+(defonce channel4-audio (make-channel-audio))
+(defonce channel4-state (init-channel-state 0.3 0 0 1
+                                             channel4-audio))
+(def channel4 (channel-dom/create (:gain channel4-state)
+                                  (:delay channel4-state)
+                                  (:highpass-cutoff channel4-state)
+                                  (:lowpass-cutoff channel4-state)
+                                  "channel4"))
+
+(def divider-master1 (channel-dom/create-divider "divider-master1"))
+(channel-dom/add-to (sel1 :body) divider-master1)
+(def divider-master2 (channel-dom/create-divider "divider-master2"))
+(channel-dom/add-to (sel1 :body) divider-master2)
+
+
+(defonce channel-master-audio (make-channel-audio))
+(defonce channel-master-state (init-channel-state 0.3 0 0 1
                                                    channel-master-audio))
+(def channel-master (channel-dom/create (:gain channel-master-state)
+                                        (:delay channel-master-state)
+                                        (:highpass-cutoff channel-master-state)
+                                        (:lowpass-cutoff channel-master-state)
+                                        "channel-master"))
+
+
+; Connect everything up
 
 (defonce master-fanin (webaudio/fanin (:graph channel-master-audio)))
 (defonce master-fanout (webaudio/fanout (:graph channel-master-audio)))
-
-(webaudio/connect [(:graph channel1-audio) (:graph channel2-audio)]
+(webaudio/connect [(:graph channel1-audio) (:graph channel2-audio) (:graph channel3-audio) (:graph channel4-audio)]
                    master-fanin)
 (webaudio/connect master-fanout
-                   [(:graph channel1-audio) (:graph channel2-audio)])
+                   [(:graph channel1-audio) (:graph channel2-audio) (:graph channel3-audio) (:graph channel4-audio)])
 (webaudio/connect master-fanout
                    (webaudio/destination audio-context))
 
-(defonce noise-osc (webaudio/make-noise-osc audio-context
-                                             :highpass-cutoff 30
-                                             :lowpass-cutoff 1800))
+
+; Make the noise osc for pingning the resonator
+
+(defonce noise-osc
+  (let [osc-node (webaudio/make-noise-osc audio-context
+                                          :highpass-cutoff 30
+                                          :lowpass-cutoff 1800)]
+    (webaudio/loop-noise-osc osc-node)
+    (webaudio/osc-start osc-node (webaudio/get-now audio-context))
+    osc-node))
 (defonce noise-gain (webaudio/make-gain 0 audio-context))
 (-> noise-osc
      (webaudio/connect noise-gain)
      webaudio/fanout
-     (webaudio/connect [(:graph channel1-audio) (:graph channel2-audio)]))
-(webaudio/loop-noise-osc noise-osc)
-(webaudio/osc-start noise-osc (webaudio/get-now audio-context))
+     (webaudio/connect [(:graph channel1-audio) (:graph channel2-audio) (:graph channel3-audio) (:graph channel4-audio)]))
 (defonce noise-gain-state (atom 0))
 (add-watch noise-gain-state
            :noise-gain-watcher
@@ -187,16 +234,38 @@
                          webaudio/set-gain!
                          identity))
 
-(make-channel channel1-elements
-               channel1-state)
-(make-channel channel2-elements
-               channel2-state)
-(make-channel channel-master-elements
-              channel-master-state)
 
-(keyboard-control/init {:channel1-state channel1-state
-                        :channel2-state channel2-state
-                        :channel-master-state channel-master-state
+; Make the saw osc for bowing the resonator
+
+(defonce bow-osc
+  (let [osc-node (webaudio/make-osc 
+                   40
+                   audio-context
+                   :osc-type "sawtooth")]
+    (webaudio/osc-start osc-node (webaudio/get-now audio-context))
+    osc-node))
+(defonce bow-gain (webaudio/make-gain 0 audio-context))
+(-> bow-osc
+     (webaudio/connect bow-gain)
+     webaudio/fanout
+     (webaudio/connect [(:graph channel1-audio) (:graph channel2-audio) (:graph channel3-audio) (:graph channel4-audio)]))
+(defonce bow-gain-state (atom 0))
+(add-watch bow-gain-state
+           :bow-gain-watcher
+           (make-watcher bow-osc
+                         webaudio/set-gain!
+                         identity))
+
+
+; Kick off the keyboard control
+
+(keyboard-control/init {:channel-states {:1 channel1-state
+                                         :2 channel2-state
+                                         :3 channel3-state
+                                         :4 channel4-state
+                                         :master channel-master-state}
                         :noise-gain-state noise-gain-state
                         :noise-gain noise-gain
+                        :bow-gain-state bow-gain-state
+                        :bow-gain bow-gain
                         :audio-context audio-context})

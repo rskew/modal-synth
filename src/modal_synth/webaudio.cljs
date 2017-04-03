@@ -71,6 +71,26 @@
     gain-graph))
 
 
+(defn make-compressor [audio-context & {:keys [threshold knee ratio attack release]
+                                        :or {threshold -24
+                                             knee 30
+                                             ratio 12
+                                             attack 0.003
+                                             release 0.25}}]
+  (let [compressor-node (.createDynamicsCompressor audio-context)
+        compressor-graph {:input-node compressor-node
+                          :output-node compressor-node
+                          :type :Compressor
+                          :node compressor-node}]
+    (doto compressor-node
+        (-> .-threshold .-value (set! threshold))
+        (-> .-knee .-value (set! knee))
+        (-> .-ratio .-value (set! ratio))
+        (-> .-attack .-value (set! attack))
+        (-> .-release .-value (set! release)))
+    compressor-graph))
+
+
 (defn set-delay-time! [delay-graph new-delay-time]
   (-> (:node delay-graph)
       .-delayTime
