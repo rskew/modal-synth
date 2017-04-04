@@ -1,27 +1,39 @@
 (defproject modal-synth "0.1.0-SNAPSHOT"
   :description "Modal synthesis for experimental music"
-  :url "https://github.com/rskew/modal-synth"
+  :url "subtleblank.com"
   :license {:name "Creative Commons Attribution 4.0 International"
             :url "https://creativecommons.org/licenses/by/4.0"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/clojurescript "1.9.229"]
                  [prismatic/dommy "1.1.0"]
-                 [cljs-bach "0.2.0"]]
-  :plugins [[lein-figwheel "0.5.8"]]
-  :clean-targets [:target-path "out"]
+                 [org.clojure/core.async "0.2.395"]]
+  :plugins [[lein-figwheel "0.5.8"]
+            [lein-cljsbuild "1.1.5"]]
+  :clean-targets ^{:protect false} ["resources/public/js/out"
+                                    "resources/public/js/min"
+                                    "resources/public/js/modal-synth.js"]
   ;:main ^:skip-aot modal-synth.core
   ;:target-path "target/%s"
   :profiles {:uberjar {:aot :all}}
 
   :cljsbuild {
-              :builds [ { :id "dev" 
-                         :source-paths ["src"]
-                         :figwheel true 
-                         :compiler { :main "modal-synth.core"
-                                    :asset-path "js/out"
-                                    :output-to "resources/public/js/modal-synth.js"
-                                    :output-dir "resources/public/js/out"
-                                    :source-map true } } ]}
+              :builds [{ :id "dev" 
+                        :source-paths ["src"]
+                        :figwheel true 
+                        :compiler { :main "modal-synth.core"
+                                   :asset-path "js/out"
+                                   :output-to "resources/public/js/modal-synth.js"
+                                   :output-dir "resources/public/js/out"
+                                   :source-map true
+                                   } }
+                       { :id "min" 
+                        :source-paths ["src"]
+                        :compiler { :main "modal-synth.core"
+                                   :output-to "resources/public/js/modal-synth.js"
+                                   :output-dir "resources/public/js/min"
+                                   :optimizations :advanced
+                                   :pretty-print false } }
+                       ]}
   :figwheel {
              :http-server-root "public" ;; this will be in resources/
              ;:server-port 5309          ;; default is 3449
@@ -77,4 +89,3 @@
              ;; :load-all-builds false ; default is true
              } 
   )
-
