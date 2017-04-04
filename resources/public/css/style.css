@@ -3,6 +3,34 @@
     --slider-width: 50vw;
 }
 
+.divider {
+    position: absolute;
+    margin: 20px;
+    width: var(--slider-width);
+    height: 7px;
+    background-color: #EEEEEE;
+}
+
+#divider1 {
+    top: calc(20px + var(--channel-height));
+}
+
+#divider2 {
+    top: calc(70px + 2 * var(--channel-height));
+}
+
+#divider3 {
+    top: calc(120px + 3 * var(--channel-height));
+}
+
+#divider-master1 {
+    top: 65vh;
+}
+
+#divider-master2 {
+    top: calc(15px + 65vh);
+}
+
 #channel1 {
     position: relative;
     left: 0;
@@ -14,6 +42,22 @@
     position: relative;
     left: 0;
     top: var(--channel-height);
+    margin: 2px 0 0 0;
+    width: var(--slider-width);
+}
+
+#channel3 {
+    position: relative;
+    left: 0;
+    top: calc(2 * var(--channel-height));
+    margin: 2px 0 0 0;
+    width: var(--slider-width);
+}
+
+#channel4 {
+    position: relative;
+    left: 0;
+    top: calc(3 * var(--channel-height));
     margin: 2px 0 0 0;
     width: var(--slider-width);
 }
@@ -66,6 +110,7 @@
   top: 0;
   border: 5px 20px 5px 20px;
   margin: 5px 20px 5px 20px;
+  width: calc(30px + var(--fader-width));
 }
 
 .bandpass-bar {
