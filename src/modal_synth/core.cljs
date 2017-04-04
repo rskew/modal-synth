@@ -49,6 +49,9 @@
 ;   - need a way to specify fader positions without actuating it and capturing new state
 ;     - 'send to pos' same problem
 ;chopper/tremolo (discourse)
+;fullscreen
+;rainmask into modal synth
+; - audio pipe utility page?
 
 (def gain-multiplier 1)
 (def delay-time-multiplier 0.05)
