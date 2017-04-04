@@ -32,14 +32,16 @@
 }
 
 #channel1 {
-    position: relative;
+    /*position: relative;*/
+    position: absolute;
     left: 0;
     top: 0;
     width: var(--slider-width);
 }
 
 #channel2 {
-    position: relative;
+    /*position: relative;*/
+    position: absolute;
     left: 0;
     top: var(--channel-height);
     margin: 2px 0 0 0;
@@ -47,7 +49,8 @@
 }
 
 #channel3 {
-    position: relative;
+    /*position: relative;*/
+    position: absolute;
     left: 0;
     top: calc(2 * var(--channel-height));
     margin: 2px 0 0 0;
@@ -55,7 +58,8 @@
 }
 
 #channel4 {
-    position: relative;
+    /*position: relative;*/
+    position: absolute;
     left: 0;
     top: calc(3 * var(--channel-height));
     margin: 2px 0 0 0;
@@ -63,7 +67,8 @@
 }
 
 #channel-master {
-    position: relative;
+    /*position: relative;*/
+    position: absolute;
     left: 0;
     top: calc(60vh - var(--channel-height));
     width: var(--slider-width);
