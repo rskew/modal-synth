@@ -12,6 +12,9 @@
             [cljs.core.async :refer [<! >! put! chan close! alts!]]))
 
 
+;fix default vals for showing peeps
+;narrower faders
+
 ;try compressor on master only
 
 ;keyboard control
@@ -52,11 +55,12 @@
 ;fullscreen
 ;rainmask into modal synth
 ; - audio pipe utility page?
+;come back from sleep
 
 (def gain-multiplier 1)
 (def delay-time-multiplier 0.05)
-(def lowpass-cutoff-upper-bound 20000)
-(def highpass-cutoff-upper-bound 20000)
+(def cutoff-upper-bound 20000)
+(def cutoff-lower-bound 30)
 
 
 (enable-console-print!)
@@ -94,15 +98,17 @@
 
 (defn highpass-cutoff-mapping [fader-level]
   "Maps the fader levels to appropriate highpass cutoff levels"
-  (Math/pow highpass-cutoff-upper-bound
-            fader-level)) 
+  (+ (Math/pow (- cutoff-upper-bound cutoff-lower-bound)
+               fader-level)
+     cutoff-lower-bound)) 
 
 
 (defn lowpass-cutoff-mapping [fader-level]
   "Maps the fader levels to appropriate lowpass cutoff levels"
   (print "updating lowpass cutoff with fader level " fader-level)
-  (Math/pow lowpass-cutoff-upper-bound
-            fader-level))
+  (+ (Math/pow (- cutoff-upper-bound cutoff-lower-bound)
+               fader-level)
+     cutoff-lower-bound))
 
 
 (defn make-watcher [graph setter mapping]
@@ -145,7 +151,7 @@
 
 (defn main []
   (defonce channel1-audio (make-channel-audio))
-  (defonce channel1-state (init-channel-state 0.3 0 0 1
+  (defonce channel1-state (init-channel-state 0.2 0.96 0 1
                                               channel1-audio))
   (def channel1 (channel-dom/create (:gain channel1-state)
                                     (:delay channel1-state)
@@ -157,7 +163,7 @@
 
 
   (defonce channel2-audio (make-channel-audio))
-  (defonce channel2-state (init-channel-state 0.3 0 0 1
+  (defonce channel2-state (init-channel-state 0.7 0.73 0.5 1
                                               channel2-audio))
   (def channel2 (channel-dom/create (:gain channel2-state)
                                     (:delay channel2-state)
@@ -169,7 +175,7 @@
 
 
   (defonce channel3-audio (make-channel-audio))
-  (defonce channel3-state (init-channel-state 0.3 0 0 1
+  (defonce channel3-state (init-channel-state 0.8 0.12 0.2 0.6
                                               channel3-audio))
   (def channel3 (channel-dom/create (:gain channel3-state)
                                     (:delay channel3-state)
@@ -181,7 +187,7 @@
 
 
   (defonce channel4-audio (make-channel-audio))
-  (defonce channel4-state (init-channel-state 0.3 0 0 1
+  (defonce channel4-state (init-channel-state 0.8 0.3 0 0.4
                                               channel4-audio))
   (def channel4 (channel-dom/create (:gain channel4-state)
                                     (:delay channel4-state)
@@ -196,7 +202,7 @@
 
 
   (defonce channel-master-audio (make-channel-audio))
-  (defonce channel-master-state (init-channel-state 0.3 0 0 1
+  (defonce channel-master-state (init-channel-state 0.7 0.13 0 1
                                                     channel-master-audio))
   (def channel-master (channel-dom/create (:gain channel-master-state)
                                           (:delay channel-master-state)
