@@ -87,36 +87,40 @@
       (setter graph (mapping new-state))))
 
 
-(defn init-channel-state [initial-gain 
-                          initial-delay-time
-                          initial-highpass-cutoff
-                          initial-lowpass-cutoff
-                          channel-audio]
-  (let [channel-state (assoc  (create-channel-state initial-gain
-                                                    initial-delay-time
-                                                    initial-highpass-cutoff
-                                                    initial-lowpass-cutoff)
-                             :analyser-array (new js/Uint8Array (-> channel-audio
-                                                                    :analyser-graph
-                                                                    webaudio/get-fft-bin-count)))]
-    (add-watch (:gain channel-state)
-               :gain-watcher
-               (make-watcher (:gain-graph channel-audio)
-                             webaudio/set-gain!
-                             gain-mapping)) 
-    (add-watch (:delay-time channel-state)
-               :delay-watcher
-               (make-watcher (:delay-graph channel-audio)
-                             webaudio/set-delay-time!
-                             delay-mapping))  
-    (add-watch (:lowpass-cutoff channel-state)
-               :lowpass-cutoff-watcher
-               (make-watcher (:bandpass-graph channel-audio)
-                             webaudio/set-lowpass-cutoff!
-                             lowpass-cutoff-mapping))  
-    (add-watch (:highpass-cutoff channel-state)
-               :highpass-cutoff-watcher
-               (make-watcher (:bandpass-graph channel-audio)
-                             webaudio/set-highpass-cutoff!
-                             highpass-cutoff-mapping))  
-    channel-state))
+(defn init-channel-state! [initial-gain 
+                           initial-delay-time
+                           initial-highpass-cutoff
+                           initial-lowpass-cutoff
+                           channel-audio]
+  (let [channel-state (create-channel-state initial-gain
+                                                     initial-delay-time
+                                                     initial-highpass-cutoff
+                                                     initial-lowpass-cutoff)]
+    (if channel-audio
+      (let [aug-channel-state
+            (assoc  channel-state
+                   :analyser-array (new js/Uint8Array (-> channel-audio
+                                                          :analyser-graph
+                                                          webaudio/get-fft-bin-count)))]
+        (add-watch (:gain aug-channel-state)
+                   :gain-watcher
+                   (make-watcher (:gain-graph channel-audio)
+                                 webaudio/set-gain!
+                                 gain-mapping)) 
+        (add-watch (:delay-time aug-channel-state)
+                   :delay-watcher
+                   (make-watcher (:delay-graph channel-audio)
+                                 webaudio/set-delay-time!
+                                 delay-mapping))  
+        (add-watch (:lowpass-cutoff aug-channel-state)
+                   :lowpass-cutoff-watcher
+                   (make-watcher (:bandpass-graph channel-audio)
+                                 webaudio/set-lowpass-cutoff!
+                                 lowpass-cutoff-mapping))  
+        (add-watch (:highpass-cutoff aug-channel-state)
+                   :highpass-cutoff-watcher
+                   (make-watcher (:bandpass-graph channel-audio)
+                                 webaudio/set-highpass-cutoff!
+                                 highpass-cutoff-mapping))  
+        aug-channel-state)
+      channel-state)))

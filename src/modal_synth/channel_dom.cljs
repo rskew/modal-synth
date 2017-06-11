@@ -2,7 +2,7 @@
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
   (:require [modal-synth.fader :as fader]
             [dommy.core :as dommy :refer [sel1 append! create-element set-class!
-                                          set-attr! replace! attr]]))
+                                          set-attr! set-style! replace! attr]]))
 
 
 (defn add-to! [parent element]
@@ -13,10 +13,10 @@
       (append! parent element))))
 
 
-(defn init [channel]
-  (fader/init (:gain channel))
-  (fader/init (:delay channel))
-  (fader/init-bandpass (:bandpass channel)))
+(defn init! [channel]
+  (fader/init! (:gain channel))
+  (fader/init! (:delay channel))
+  (fader/init-bandpass! (:bandpass channel)))
 
 
 (defn create-spectrum-vis []
@@ -27,17 +27,17 @@
      :context context}))
 
 
-(defn create! [gain-fader-state
-               delay-fader-state
-               highpass-cutoff-state
-               lowpass-cutoff-state
-               id]
+(defn make [gain-fader-state
+            delay-fader-state
+            highpass-cutoff-state
+            lowpass-cutoff-state
+            id]
   (let [channel-element (create-element :div)
         gain-fader (fader/create gain-fader-state :Gain)
         delay-fader (fader/create delay-fader-state :Delay)
         bandpass (fader/create-bandpass highpass-cutoff-state lowpass-cutoff-state)
         spectrum-vis (create-spectrum-vis)
-        channel {:channel-element channel-element
+        channel {:element channel-element
                  :gain gain-fader
                  :delay delay-fader
                  :bandpass bandpass
@@ -50,11 +50,32 @@
     (set-attr! channel-element
                "onmousedown"
                "event.preventDefault ? event.preventDefault() : event.returnValue = false"
-               :id
-               id)
-    (add-to! (sel1 :body) channel-element)
-    (init channel)
+               :id id)
     channel))
+
+
+(defn create! [gain-state
+               delay-state
+               highpass-state
+               lowpass-state
+               id]
+  (let [channel (make gain-state delay-state highpass-state lowpass-state id)]
+    (append! (sel1 :body) (:element channel))
+    (init! channel)
+    channel))
+
+
+(defn create-cycle! [gain-state delay-state highpass-state lowpass-state id]
+  (let [channel (make gain-state delay-state highpass-state lowpass-state id)]
+    (set-class! (:element channel) "cycle-channel")
+    (set-style! (-> channel :gain :box) :visibility "hidden")
+    (set-style! (-> channel :delay :box) :visibility "hidden")
+    (set-style! (-> channel :bandpass :box) :visibility "hidden")
+    (append! (sel1 :body) (:element channel))
+    channel))
+
+
+
 
 
 (defn create-divider [id]

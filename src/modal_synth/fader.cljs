@@ -73,8 +73,9 @@
             :else level)))))
 
 
-(defn mouse-control! [element state chan]
+(defn mouse-control!
   "Handler for mouse events relating to an element"
+  [element state chan]
   (let [mousedown-chan (listen element "mousedown")]
     (go (while true
                (let [click-event (<! mousedown-chan)]
@@ -97,21 +98,7 @@
                                                      "pointer"))))))))))
 
 
-;(defn create [elements fader-state fader-type]
-;  "Initialise fader object, start 'go' block for updating state"
-;  (let [receive-chan (chan)
-;        bar (:bar elements)
-;        box (:box elements)
-;        handle (:handle elements)]
-;    {:state fader-state
-;     :chan receive-chan
-;     :bar bar
-;     :handle handle
-;     :box box
-;     :type fader-type}))
-
-
-(defn init [fader]
+(defn init! [fader]
   ;re-draw the faders whenever the state is updated,
   ; by mouse or by automation
   (add-watch (:state fader)
@@ -128,13 +115,28 @@
   (reset! (:state fader) @(:state fader)))
 
 
+(defn init-cycle! [fader cycle-node-element]
+  (add-watch (:state fader)
+             :draw-watcher
+             (fn [key atom old-state new-state]
+                 (draw fader)))
+  (go (while true
+             (let [new-level (<! (:chan fader))]
+               (reset! (:state fader) new-level))))
+  (mouse-control! cycle-node-element (:state fader) (:chan fader))
+  ;; hide it!
+  (set-style! (:bar fader) :background-color "rgba(0,0,0,0.3)")
+  (set-style! (:box fader) :visibility "visible")
+  ;;initialise the states to sync up all that depend on them
+  (reset! (:state fader) @(:state fader))) 
+
+
 (defn create [fader-state fader-type]
   (let [box (create-element :div)
         bar (create-element :div)
         handle (create-element :div)
-        receive-chan (chan)
         fader {:state fader-state
-               :chan receive-chan
+               :chan (chan)
                :box box
                :bar bar
                :handle handle
@@ -147,7 +149,7 @@
     fader))
 
 
-(defn init-bandpass [bp]
+(defn init-bandpass! [bp]
   ;re-draw the faders whenever the state is updated,
   ; by mouse or by automation
   (add-watch (:state-highpass bp)

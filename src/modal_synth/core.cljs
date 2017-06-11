@@ -12,7 +12,7 @@
             [modal-synth.scheduler :as event-scheduler]
             [goog.dom :as dom]
             [goog.events :as events]
-            [dommy.core :as dommy :refer [sel1 append! parent replace! create-element set-attr!]]
+            [dommy.core :as dommy :refer [sel1 append! parent replace! create-element set-attr! set-style!]]
             [cljs.core.async :refer [<! >! put! chan close! alts!]]))
 
 
@@ -42,7 +42,7 @@
 
 ;audio in
 
-;bandpass bar mouse grab
+;analyser bar mouse grab highlight fix off
 
 ;narrower faders
 
@@ -92,13 +92,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn init-channels! []
   (defonce channel1-audio (channel/make-channel-audio audio-context))
-  (defonce channel1-state (channel/init-channel-state 0.2 0.96 0 1
+  (defonce channel1-state (channel/init-channel-state! 0.2 0.46 0 1
                                               channel1-audio))
   (def channel1 (channel-dom/create! (:gain channel1-state)
                                      (:delay-time channel1-state)
                                      (:highpass-cutoff channel1-state)
                                      (:lowpass-cutoff channel1-state)
                                      "channel1"))
+  (println "just created channel1 not cycle, gain state: " @(:state (:gain channel1)))
+  (defonce channel1-cycle-state (channel/init-channel-state! 0.8 1 0.3 0.7
+                                              nil))
+  (def channel1-cycle (channel-dom/create-cycle! (:gain channel1-cycle-state)
+                                                 (:delay-time channel1-cycle-state)
+                                                 (:highpass-cutoff channel1-cycle-state)
+                                                 (:lowpass-cutoff channel1-cycle-state)
+                                                 "channel1"))
+  (println "just created channel1 with cycle, gain state: " @(:state (:gain channel1)))
   (def divider1 (channel-dom/create-divider "divider1"))
   (channel-dom/add-to! (sel1 :body) divider1)
 
@@ -113,7 +122,7 @@
 
 
   (defonce channel2-audio (channel/make-channel-audio audio-context))
-  (defonce channel2-state (channel/init-channel-state 0.7 0.73 0.5 1
+  (defonce channel2-state (channel/init-channel-state! 0.7 0.73 0.5 1
                                               channel2-audio))
   (def channel2 (channel-dom/create! (:gain channel2-state)
                                      (:delay-time channel2-state)
@@ -125,7 +134,7 @@
 
 
   (defonce channel3-audio (channel/make-channel-audio audio-context))
-  (defonce channel3-state (channel/init-channel-state 0.8 0.12 0.2 0.6
+  (defonce channel3-state (channel/init-channel-state! 0.8 0.12 0.2 0.6
                                               channel3-audio))
   (def channel3 (channel-dom/create! (:gain channel3-state)
                                      (:delay-time channel3-state)
@@ -137,7 +146,7 @@
 
 
   (defonce channel4-audio (channel/make-channel-audio audio-context))
-  (defonce channel4-state (channel/init-channel-state 0.8 0.3 0 0.4
+  (defonce channel4-state (channel/init-channel-state! 0.8 0.3 0 0.4
                                               channel4-audio))
   (def channel4 (channel-dom/create! (:gain channel4-state)
                                      (:delay-time channel4-state)
@@ -152,7 +161,7 @@
 
 
   (defonce channel-master-audio (channel/make-channel-audio audio-context))
-  (defonce channel-master-state (channel/init-channel-state 0.7 0.13 0 1
+  (defonce channel-master-state (channel/init-channel-state! 0.7 0.13 0 1
                                                     channel-master-audio))
   (def channel-master (channel-dom/create! (:gain channel-master-state)
                                            (:delay-time channel-master-state)
@@ -246,12 +255,15 @@
   (defonce cycles-div (create-element :div))
   (set-attr! cycles-div :id "cycles")
   (append! (sel1 :body) cycles-div)
-  (defonce cycle1 (cycles/create {:topleft {:x 10 :y 10} :width 200}
-                                 7
-                                 :freq (atom 1)
-                                 :channel-state channel1-state
-                                 :channel-audio channel1-audio))
-  (append! cycles-div (:cycle-element cycle1)))
+  (let [cycle-fader1 (:delay channel1-cycle)
+        audio-fader-state (:state (:delay channel1))]
+    (defonce cycle1 (cycles/create {:topleft {:x 10 :y 10} :width 200}
+                                   7
+                                   audio-fader-state
+                                   cycle-fader1
+                                   :freq (atom 10)))
+    (append! cycles-div (:cycle-element cycle1))
+    (doall (map (comp (partial fader/init-cycle! cycle-fader1) :svg-element) (:nodes cycle1))))) 
 
 (defn init-scheduler! []
   (defonce scheduler (event-scheduler/create! audio-context

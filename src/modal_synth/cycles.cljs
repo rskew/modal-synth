@@ -1,6 +1,7 @@
 (ns modal-synth.cycles
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
   (:require [modal-synth.channel-dom :as channel-dom]
+            [modal-synth.utils :refer [listen]]
             [modal-synth.fader :as fader]
             [modal-synth.webaudio :as webaudio]
             [modal-synth.channel :as channel]
@@ -41,26 +42,54 @@
     (set-attr! circle :cx node-radius)
     (set-attr! circle :cy node-radius)
     (set-attr! circle :r node-radius)
-    (set-attr! circle :fill "black")
+    (set-attr! circle :fill "rgba(50,130,200,0.6)")
     (set-attr! circle :stroke "white")
     circle))
 
 
-(defn make-node [real-channel-state position]
+(defn make-node [audio-fader-state cycle-fader position]
   (let [svg-element (create-element "http://www.w3.org/2000/svg" :svg)
-        node-state (channel/create-channel-state 0.5 0.5 0 1)]
-    (channel/copy-channel-state! real-channel-state node-state)
+        node-state (atom @audio-fader-state)]
     (set-class! svg-element "cycle-node")
     (set-style! svg-element :left (str (int (- (:x position) node-radius)) "px")
                             :top (str (int (- (:y position) node-radius)) "px")
                             :position "absolute")
     (set-attr! svg-element :width (* 2 node-radius)
                            :height (* 2 node-radius)
-                           :onclick #(do
-                                      (channel/copy-channel-state! real-channel-state
-                                                                   node-state)
-                                      (println "updating node at " position
-                                               " to " node-state)))
+                           ;:onmousedown (set-style! (:box cycle-fader)
+                           ;                           :visibility "visible")
+                           ;:onmouseup (set-style! (:box cycle-fader)
+                           ;                           :visibility "hidden")
+                           ;:onclick (let [mouseup-chan (listen svg-element "mouseup")]
+                           ;           (set-style! (:box cycle-fader)
+                           ;                       :visibility "visible")
+                           ;           (println "node now visible")
+                           ;           (go
+                           ;             (let [click-event (<! mouseup-chan)]
+                           ;               (close! mouseup-chan)
+                           ;               (set-style! (:box cycle-fader)
+                           ;                           :visibility "hidden")
+                           ;               (println "node now invisible"))))
+                           ;:onclick #(do
+                           ;           (channel/copy-channel-state! real-channel-state
+                           ;                                        node-state)
+                           ;           (println "updating node at " position
+                           ;                    " to " node-state))
+                           )
+
+    (go (while true
+               (let [mousedown-chan (listen svg-element "mousedown")]
+                 (<! mousedown-chan)
+                 (println "making cycle fader visible")
+                 (reset! (:state cycle-fader) @audio-fader-state)
+                 (set-style! (:box cycle-fader) :visibility "visible")
+                 (let [mouseup-chan (listen js/document "mouseup")]
+                   (<! mouseup-chan)
+                   (println "hiding cycle fader")
+                   (reset! node-state @(:state cycle-fader))
+                   (set-style! (:box cycle-fader) :visibility "hidden")
+                   (close! mouseup-chan)
+                   (close! mousedown-chan)))))
     (let [circle-element (create-circle)]
       (append! svg-element circle-element)
       {:position position
@@ -70,14 +99,14 @@
 
 
 (defn deactivate-node! [{:keys [circle-element]}]
-  (set-attr! circle-element :fill "black"))
+  (set-attr! circle-element :fill "rgba(50,130,200,0.6)"))
 
 
 (defn activate-node! [{:keys [circle-element]}]
   (set-attr! circle-element :fill "#777777"))
 
 
-(defn make-ticker [nodes channel-audio channel-state]
+(defn make-ticker [nodes audio-fader-state]
   (let [active-node-index (atom 0)]
     (fn [event-fire-time]
         ;turn current active node off
@@ -85,16 +114,8 @@
         ;increment active-node-index
         (swap! active-node-index #(mod (inc %) (count nodes)))
         ;activate next node
-        (println "activating node " @active-node-index)
         (activate-node! (nth nodes @active-node-index))
-        (channel/copy-channel-state! (:state (nth nodes @active-node-index))
-                                     channel-state)    
-        #_(channel/update-audio-at-time! channel-audio channel-state event-fire-time)
-        #_(go
-          (<! (timeout 10))
-          (println "updating state with active node " @active-node-index)
-          (channel/copy-channel-state! (:state (nth nodes @active-node-index))
-                                       channel-state)))))
+        (reset! audio-fader-state @(:state (nth nodes @active-node-index))))))
 
 
 (defn calc-next-tick-time [cycle-freq]
@@ -103,15 +124,16 @@
          (/ 1. @cycle-freq))))
 
 
-(defn create [box n & {:keys [freq channel-audio channel-state]
-                                  :or {freq 0.5}}]
+(defn create [box n audio-fader-state cycle-fader & {:keys [freq]
+                       :or {freq 0.5}}]
   (let [cycle-element (create-element :div)
         positions (arrange box n)
-        nodes (map (partial make-node channel-state) positions)
-        tick! (make-ticker nodes channel-audio channel-state)]
+        nodes (map (partial make-node audio-fader-state cycle-fader) positions)
+        tick! (make-ticker nodes audio-fader-state)]
     (doall
       (map (fn [node] (append! cycle-element (:svg-element node))) nodes))
     {:cycle-element cycle-element
      :nodes nodes
      :freq freq
-     :tick! tick!}))
+     :tick! tick!
+     :cycle-fader cycle-fader}))

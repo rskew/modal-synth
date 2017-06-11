@@ -60,4 +60,5 @@
                                (call-at-time! scheduler
                                               (partial self self callback!)
                                               (calc-next-time at-time)))]
-    (call-at-time! scheduler (partial recursive-wrapper! recursive-wrapper! callback!) at-time)))
+    (call-at-time! scheduler callback! at-time)
+    (call-at-time! scheduler (partial recursive-wrapper! recursive-wrapper! callback!) at-time)))  

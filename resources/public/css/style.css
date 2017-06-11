@@ -75,6 +75,16 @@
     width: var(--slider-width);
 }
 
+/*
+.channel {
+    z-index 20;
+}
+
+.cycle-channel {
+    z-index: 10;
+}
+*/
+
 .slider {
   position: relative;
   left: 0;
@@ -86,7 +96,7 @@
 
 .slider-bar {
   position: absolute;
-  background-color: black;
+  background-color: rgba(50,130,200,0.6);
   z-index: 0;
   width: 50px;
   height: 20px;
@@ -95,7 +105,7 @@
 .slider-handle {
   width: 40px;
   height: 20px;
-  background-color: #777777;
+  background-color: rgba(119,119,119,0.6);
   position: absolute;
   z-index: 10;
   left: 0;
@@ -250,4 +260,5 @@
     left: 0px;
     top: 0px;
     width: calc(2 * var(cycle-node-radius));
+    cursor: pointer;
 }
