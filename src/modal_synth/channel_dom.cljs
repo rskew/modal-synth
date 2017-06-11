@@ -5,7 +5,7 @@
                                           set-attr! replace! attr]]))
 
 
-(defn add-to [parent element]
+(defn add-to! [parent element]
   (let [id (attr element :id)
         old-element (sel1 (str "#" id))]
     (if old-element
@@ -19,29 +19,40 @@
   (fader/init-bandpass (:bandpass channel)))
 
 
-(defn create [gain-fader-state
-              delay-fader-state
-              highpass-cutoff-state
-              lowpass-cutoff-state
-              id]
+(defn create-spectrum-vis []
+  (let [canvas (create-element :canvas)
+        context (-> canvas (.getContext "2d"))]
+    (set-class! canvas "spectrum-vis")
+    {:canvas-element canvas
+     :context context}))
+
+
+(defn create! [gain-fader-state
+               delay-fader-state
+               highpass-cutoff-state
+               lowpass-cutoff-state
+               id]
   (let [channel-element (create-element :div)
         gain-fader (fader/create gain-fader-state :Gain)
         delay-fader (fader/create delay-fader-state :Delay)
         bandpass (fader/create-bandpass highpass-cutoff-state lowpass-cutoff-state)
+        spectrum-vis (create-spectrum-vis)
         channel {:channel-element channel-element
                  :gain gain-fader
                  :delay delay-fader
-                 :bandpass bandpass}]
+                 :bandpass bandpass
+                 :spectrum-vis spectrum-vis}]
     (append! channel-element (:box gain-fader))
     (append! channel-element (:box delay-fader))
     (append! channel-element (:box bandpass))
+    (append! (:box bandpass) (:canvas-element spectrum-vis))
     (set-class! channel-element "channel")
     (set-attr! channel-element
                "onmousedown"
                "event.preventDefault ? event.preventDefault() : event.returnValue = false"
                :id
                id)
-    (add-to (sel1 :body) channel-element)
+    (add-to! (sel1 :body) channel-element)
     (init channel)
     channel))
 

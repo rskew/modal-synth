@@ -73,7 +73,7 @@
             :else level)))))
 
 
-(defn mouse-control [element state chan]
+(defn mouse-control! [element state chan]
   "Handler for mouse events relating to an element"
   (let [mousedown-chan (listen element "mousedown")]
     (go (while true
@@ -123,7 +123,7 @@
              (let [new-level (<! (:chan fader))]
                (reset! (:state fader) new-level))))
   ;kick start processes to listen for mouse inputs
-  (mouse-control (:handle fader) (:state fader) (:chan fader))
+  (mouse-control! (:handle fader) (:state fader) (:chan fader))
   ;initialise the states to sync up all that depend on them
   (reset! (:state fader) @(:state fader)))
 
@@ -172,10 +172,10 @@
                  (reset! (:state-lowpass bp) new-level)
                  (reset! (:state-lowpass bp) lowpass-min)))))
   ;kick start processes to listen for mouse inputs
-  (mouse-control (:handle-highpass bp) (:state-highpass bp) (:chan-highpass bp))
-  (mouse-control (:handle-lowpass bp) (:state-lowpass bp) (:chan-lowpass bp))
-  (mouse-control (:bar bp) (:state-highpass bp) (:chan-highpass bp))
-  (mouse-control (:bar bp) (:state-lowpass bp) (:chan-lowpass bp))
+  (mouse-control! (:handle-highpass bp) (:state-highpass bp) (:chan-highpass bp))
+  (mouse-control! (:handle-lowpass bp) (:state-lowpass bp) (:chan-lowpass bp))
+  (mouse-control! (:bar bp) (:state-highpass bp) (:chan-highpass bp))
+  (mouse-control! (:bar bp) (:state-lowpass bp) (:chan-lowpass bp))
   ;initialise the states to sync up all that depend on them
   (reset! (:state-highpass bp) @(:state-highpass bp))
   (reset! (:state-lowpass bp) @(:state-lowpass bp)))

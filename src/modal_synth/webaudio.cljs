@@ -20,31 +20,26 @@
    :type :Fanin})
 
 
-(defn fanout [graph]
-  (assoc graph :type :Fanout))
-
-
-(defn fanin [graph]
-  (assoc graph :type :Fanin))
-
-
-(defmulti connect (fn [graph1 graph2] [(:type graph1) (:type graph2)]))
-
-(defmethod connect [:Fanout nil] [fanout sink-graphs]
-  (doseq [source [fanout]
-          sink sink-graphs]
-         (connect source sink)))
-
-(defmethod connect [nil :Fanin] [source-graphs fanin]
-  (doseq [source source-graphs
-          sink [fanin]]
-         (connect source sink)))
-
-(defmethod connect :default [source-graph sink-graph]
+(defn connect-node-to-node! [source-graph sink-graph]
   (.connect (:output-node source-graph) (:input-node sink-graph))
   {:input-node (:input-node source-graph)
    :output-node (:output-node sink-graph)
    :type :Graph})
+
+
+(defn connect! [graph1 graph2]
+  (let [result-graph (for [source (flatten (vector graph1))
+                           sink (flatten (vector graph2))]
+                          (connect-node-to-node! source sink))]
+    (doall result-graph)
+    result-graph))
+
+
+(defn ramp-to-value-at-time! [param new-val at-time & {:keys [slope]
+                                                      :or {slope :linear}}]
+  (if (= slope :exponential)
+    (.exponentialRampToValueAtTime param new-val at-time)
+    (.linearRampToValueAtTime param new-val at-time)))
 
 
 (defn get-gain [gain-graph]
@@ -53,12 +48,18 @@
       .-gain))
 
 
-(defn set-gain! [gain-graph new-gain]
-  (-> gain-graph
-      :node
-      .-gain
-      .-value
-      (set! new-gain)))
+(defn set-gain!
+  ([gain-graph new-gain]
+   (-> gain-graph
+       :node
+       .-gain
+       .-value
+       (set! new-gain)))
+  ([gain-graph new-gain at-time]
+   (-> gain-graph
+       :node
+       .-gain
+       (ramp-to-value-at-time! new-gain at-time))))
 
 
 (defn make-gain [init-gain audio-context]
@@ -91,11 +92,18 @@
     compressor-graph))
 
 
-(defn set-delay-time! [delay-graph new-delay-time]
-  (-> (:node delay-graph)
-      .-delayTime
-      .-value
-      (set! new-delay-time)))
+(defn set-delay-time!
+  ([delay-graph new-delay-time]
+   (-> (:node delay-graph)
+       .-delayTime
+       .-value
+       (set! new-delay-time)))
+  ([delay-graph new-delay-time at-time]
+   (println "setting delay to " new-delay-time " at time " at-time)
+   (-> delay-graph
+       :node
+       .-delayTime
+       (ramp-to-value-at-time! new-delay-time at-time))))
 
 
 (defn make-delay-line [max-delay-time audio-context]
@@ -122,11 +130,11 @@
      :node osc-node}))
 
 
-(defn osc-start [osc start-time]
+(defn osc-start! [osc start-time]
   (.start (:node osc) start-time))
 
 
-(defn osc-stop [osc stop-time]
+(defn osc-stop! [osc stop-time]
   (.stop (:node osc) stop-time))
 
 
@@ -152,22 +160,47 @@
      :highpass-cutoff highpass-cutoff}))
 
 
-(defn set-lowpass-cutoff! [bandpass new-lowpass-cutoff]
-  (print "setting lowpass to " new-lowpass-cutoff)
-  (-> bandpass
-      :lowpass-node
-      .-frequency
-      .-value
-      (set! new-lowpass-cutoff)))
+(defn set-lowpass-cutoff!
+  ([bandpass new-lowpass-cutoff]
+   (-> bandpass
+       :lowpass-node
+       .-frequency
+       .-value
+       (set! new-lowpass-cutoff)))
+  ([bandpass new-lowpass-cutoff at-time]
+   (-> bandpass
+       :lowpass-node
+       .-frequency
+       (ramp-to-value-at-time! new-lowpass-cutoff at-time))))   
 
 
-(defn set-highpass-cutoff! [bandpass new-highpass-cutoff]
-  (print "setting highpass to " new-highpass-cutoff)
-  (-> bandpass
-      :highpass-node
-      .-frequency
-      .-value
-      (set! new-highpass-cutoff)))
+(defn set-highpass-cutoff!
+  ([bandpass new-highpass-cutoff]
+   (-> bandpass
+       :highpass-node
+       .-frequency
+       .-value
+       (set! new-highpass-cutoff)))
+  ([bandpass new-highpass-cutoff at-time]
+   (-> bandpass
+       :highpass-node
+       .-frequency
+       (ramp-to-value-at-time! new-highpass-cutoff at-time))))      
+
+
+(defn make-analyser [fft-size audio-context]
+  (let [analyser-node (.createAnalyser audio-context)]
+    (-> analyser-node .-fftSize (set! fft-size))
+    {:input-node analyser-node
+     :output-node nil
+     :analyser-node analyser-node
+     :type :Analyser}))
+
+
+(defn get-fft-bin-count [analyser-graph]
+   (-> analyser-graph
+       :analyser-node
+       .-frequencyBinCount))
 
 
 (defn make-noise-buffer [length audio-context & {:keys [noise-type]}]
@@ -211,7 +244,7 @@
      :node noise-buffer-source}))
 
 
-(defn loop-noise-osc [noise-osc]
+(defn loop-noise-osc! [noise-osc]
   (-> noise-osc
       :node
       .-loop
@@ -224,10 +257,9 @@
                                   :lowpass-cutoff 1800)
         now (get-now audio-context)]
     (-> noise-osc
-        fanout
-        (connect graphs))
-    (osc-start noise-osc now)
-    (osc-stop noise-osc (+ now 0.025))
+        (connect! graphs))
+    (osc-start! noise-osc now)
+    (osc-stop! noise-osc (+ now 0.025))
     (print "Fire!")))
 
 
@@ -241,7 +273,7 @@
    :slope slope})
 
 
-(defn apply-adsr [param adsr noteoff-chan audio-context
+(defn apply-adsr! [param adsr noteoff-chan audio-context
                   & {:keys [start-time-offset start-val attack-peak-val]
                      :or {start-time-offset 0
                           start-val 1e-30
@@ -249,28 +281,25 @@
   (let [now (get-now audio-context)
         attack-start-time (+ now start-time-offset)
         decay-start-time (+ attack-start-time (:attack-time adsr))
-        sustain-start-time (+ decay-start-time (:decay-time adsr))
-        slope-func (if (= (:slope adsr) :exponential)
-                     (fn [param new-val at-time] (.exponentialRampToValueAtTime param new-val at-time))
-                     (fn [param new-val at-time] (.linearRampToValueAtTime param new-val at-time)))]
+        sustain-start-time (+ decay-start-time (:decay-time adsr))]
     (.setValueAtTime param start-val attack-start-time)
-    (slope-func param attack-peak-val decay-start-time)
-    (slope-func param (:sustain-level adsr) sustain-start-time)
-    ;wait for noteoff, then release
+    (ramp-to-value-at-time! param attack-peak-val decay-start-time :slope (:slope adsr))
+    (ramp-to-value-at-time! param (:sustain-level adsr) sustain-start-time :slope (:slope adsr))
+    ;;wait for noteoff, then release
     (go
       (<! noteoff-chan)
       (print "noteoff!")
       (let [now (get-now audio-context)
             release-end-time (+ now (:release-time adsr))]
-        (slope-func param start-val release-end-time))
+        (ramp-to-value-at-time! param start-val release-end-time :slope (:slope adsr)))
       (while (poll! noteoff-chan)))))
 
 
-(defn apply-ar-envelope [param adsr audio-context
-                         & {:keys [start-time-offset start-val attack-peak-val]
-                            :or {start-time-offset 0
-                                 start-val 1e-30
-                                 attack-peak-val 1}}]
+(defn apply-ar-envelope! [param adsr audio-context
+                          & {:keys [start-time-offset start-val attack-peak-val]
+                             :or {start-time-offset 0
+                                  start-val 1e-30
+                                  attack-peak-val 1}}]
   (let [noteoff-chan (chan)]
     (put! noteoff-chan :noteoff)
-    (apply-adsr param adsr noteoff-chan audio-context)))
+    (apply-adsr! param adsr noteoff-chan audio-context)))
