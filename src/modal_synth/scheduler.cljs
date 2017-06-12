@@ -34,7 +34,7 @@
     (go-loop []
              (let [now (.-currentTime audio-context)]
                (while (next-event-within-horizon? scheduler now)
-                      (println "scheduling event , now= " (.-currentTime audio-context))
+                      #_(println "scheduling event , now= " (.-currentTime audio-context))
                       (let [event (first @(:queue scheduler))]
                         (swap! (:queue scheduler) rest) 
                         ((:callback! event) (:time event))))

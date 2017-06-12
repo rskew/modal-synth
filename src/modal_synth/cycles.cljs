@@ -9,17 +9,16 @@
             [modal-synth.spectro-vis :as spectro-vis]
             [goog.dom :as dom]
             [goog.events :as events]
-            [dommy.core :as dommy :refer [create-element sel1 append! set-attr! set-class! set-style! attr]]
+            [dommy.core :as dommy :refer [create-element sel1 append! set-attr! set-class! set-style! attr remove!]]
             [cljs.core.async :refer [<! >! put! chan close! alts! timeout]]))
 
 
+;add/remove nodes
 
-;;
-;node has audio graph state, when activated applies that state
-
-;click node
-;- timout then second click saves current state to that node
-;- if click before timeout then make that node active next
+;assign to fader
+;- grab fader-selection-symbol and drag onto fader?
+;  - make fader-selection-symbol draggable
+;  - set faders  with ondragover, ondrop easy peasy
 
 ;set tempo
 
@@ -27,95 +26,51 @@
 (def node-radius 14)
 
 
-(defn arrange [{:keys [width]
-                {:keys [x y]} :topleft}
-               n]
-  (let [angles (map #(/ (* 2. Math/PI %) n) (range n))
+(defn arrange [{:keys [x y]} n]
+  (let [width 400
+        angles (map #(/ (* 2. Math/PI %) n) (range n))
         radius (- (/ width 2) node-radius)
         angle-to-pos (fn [angle] {:x (+ (* radius (Math/sin angle)) x (/ width 2))
                                   :y (+ (* radius (- (Math/cos angle))) y (/ width 2))})]
     (map angle-to-pos angles)))
 
 
-(defn create-circle []
-  (let [circle (create-element "http://www.w3.org/2000/svg" :circle)]
-    (set-attr! circle :cx node-radius)
-    (set-attr! circle :cy node-radius)
-    (set-attr! circle :r node-radius)
-    (set-attr! circle :fill "rgba(50,130,200,0.6)")
-    (set-attr! circle :stroke "white")
-    circle))
-
-
-(defn make-node [audio-fader-state cycle-fader position]
-  (let [svg-element (create-element "http://www.w3.org/2000/svg" :svg)
+(defn make-node [audio-fader-state cycle-fader]
+  (let [node-element (create-element :div)
         node-state (atom @audio-fader-state)]
-    (set-class! svg-element "cycle-node")
-    (set-style! svg-element :left (str (int (- (:x position) node-radius)) "px")
-                            :top (str (int (- (:y position) node-radius)) "px")
-                            :position "absolute")
-    (set-attr! svg-element :width (* 2 node-radius)
-                           :height (* 2 node-radius)
-                           ;:onmousedown (set-style! (:box cycle-fader)
-                           ;                           :visibility "visible")
-                           ;:onmouseup (set-style! (:box cycle-fader)
-                           ;                           :visibility "hidden")
-                           ;:onclick (let [mouseup-chan (listen svg-element "mouseup")]
-                           ;           (set-style! (:box cycle-fader)
-                           ;                       :visibility "visible")
-                           ;           (println "node now visible")
-                           ;           (go
-                           ;             (let [click-event (<! mouseup-chan)]
-                           ;               (close! mouseup-chan)
-                           ;               (set-style! (:box cycle-fader)
-                           ;                           :visibility "hidden")
-                           ;               (println "node now invisible"))))
-                           ;:onclick #(do
-                           ;           (channel/copy-channel-state! real-channel-state
-                           ;                                        node-state)
-                           ;           (println "updating node at " position
-                           ;                    " to " node-state))
-                           )
-
-    (go (while true
-               (let [mousedown-chan (listen svg-element "mousedown")]
-                 (<! mousedown-chan)
-                 (println "making cycle fader visible")
-                 (reset! (:state cycle-fader) @audio-fader-state)
-                 (set-style! (:box cycle-fader) :visibility "visible")
-                 (let [mouseup-chan (listen js/document "mouseup")]
-                   (<! mouseup-chan)
-                   (println "hiding cycle fader")
-                   (reset! node-state @(:state cycle-fader))
-                   (set-style! (:box cycle-fader) :visibility "hidden")
-                   (close! mouseup-chan)
-                   (close! mousedown-chan)))))
-    (let [circle-element (create-circle)]
-      (append! svg-element circle-element)
-      {:position position
-       :svg-element svg-element
-       :circle-element circle-element
-       :state node-state})))
+    (set-class! node-element "cycle-node")
+    (let [mousedown (fn [element state output-chan]
+                        (reset! state @node-state)
+                        (set-style! (:box cycle-fader) :visibility "visible"))
+          mouseup (fn [element state output-chan]
+                      (reset! node-state @state)
+                      (set-style! (:box cycle-fader) :visibility "hidden"))]
+      {:element node-element
+       :state node-state
+       :mouseup mouseup
+       :mousedown mousedown})))
 
 
-(defn deactivate-node! [{:keys [circle-element]}]
-  (set-attr! circle-element :fill "rgba(50,130,200,0.6)"))
+(defn deactivate-node! [{:keys [element]}]
+  (set-style! element :background-color "rgba(0,0,0,0.2)"))
 
 
-(defn activate-node! [{:keys [circle-element]}]
-  (set-attr! circle-element :fill "#777777"))
+(defn activate-node! [{:keys [element]}]
+  (set-style! element :background-color "rgba(50,130,200,0.6)"))
 
 
 (defn make-ticker [nodes audio-fader-state]
   (let [active-node-index (atom 0)]
     (fn [event-fire-time]
-        ;turn current active node off
-        (deactivate-node! (nth nodes @active-node-index))
-        ;increment active-node-index
-        (swap! active-node-index #(mod (inc %) (count nodes)))
-        ;activate next node
-        (activate-node! (nth nodes @active-node-index))
-        (reset! audio-fader-state @(:state (nth nodes @active-node-index))))))
+        ;; turn current active node off
+        (when (< @active-node-index (count @nodes))
+          (deactivate-node! (nth @nodes @active-node-index)))
+        ;; increment active-node-index
+        (swap! active-node-index #(mod (inc %) (count @nodes)))
+        ;; activate next node
+        (when (< @active-node-index (count @nodes))
+          (activate-node! (nth @nodes @active-node-index))
+          (reset! audio-fader-state @(:state (nth @nodes @active-node-index)))))))
 
 
 (defn calc-next-tick-time [cycle-freq]
@@ -124,15 +79,96 @@
          (/ 1. @cycle-freq))))
 
 
-(defn create [box n audio-fader-state cycle-fader & {:keys [freq]
+(defn add-node! [cycle- audio-fader-state cycle-fader]
+  (let [new-node (make-node audio-fader-state cycle-fader)
+        last-node (last @(:nodes cycle-))]
+    (reset! (:state new-node) @(:state last-node))
+    (append! (:node-div cycle-) (:element new-node))
+    (fader/init-cycle! cycle-fader new-node)  
+    (swap! (:nodes cycle-) conj new-node)))
+
+
+(defn remove-node! [nodes]
+  (let [node (last @nodes)]
+    (remove! (:element node))
+    (swap! nodes #(vec (drop-last %)))))
+
+
+(defn make-increment-element [nodes node-div audio-fader-state cycle-fader]
+  (let [element (create-element :div)
+        horizontal (create-element :div)  
+        vertical (create-element :div)]
+    (set-style! element
+                :top "5px"
+                :left "25px"
+                :display "table-cell"
+                :position "relative")
+    (set-attr! element
+               :onmousedown #(add-node! {:nodes nodes :node-div node-div} audio-fader-state cycle-fader))
+    (append! element horizontal)
+    (set-style! horizontal
+                :background-color "black"
+                :top "7px"
+                :height "6px"
+                :width "20px"
+                :position "absolute")
+    (append! element vertical)
+    (set-style! vertical
+                :background-color "black"
+                :left "7px"
+                :height "20px"
+                :width "6px"
+                :position "absolute")
+    element))
+
+
+(defn make-decrement-element [nodes]
+  (let [element (create-element :div)
+        minus (create-element :div)]
+    (append! element minus)
+    (set-style! element
+                :top "5px"
+                :left "5px"
+                :display "table-cell"
+                :position "relative")
+    (set-attr! element
+               :onmousedown #(remove-node! nodes))
+    (set-style! minus
+                :background-color "black"
+                :top "7px"
+                :height "6px"
+                :width "20px"
+                :position "absolute")
+    element))
+
+
+(defn create [topleft n audio-fader-state cycle-fader & {:keys [freq]
                        :or {freq 0.5}}]
   (let [cycle-element (create-element :div)
-        positions (arrange box n)
-        nodes (map (partial make-node audio-fader-state cycle-fader) positions)
+        node-div (create-element :div)
+        nodes (atom (vec (for [_ (range n)] (make-node audio-fader-state cycle-fader))))
+        controls-div (create-element :div)
+        fader-assign-handle (create-element :div)
+        decrement-nodes (make-decrement-element nodes)
+        increment-nodes (make-increment-element nodes node-div audio-fader-state cycle-fader)
         tick! (make-ticker nodes audio-fader-state)]
+    (set-class! cycle-element "cycle")
+    (set-class! node-div "node-div")
+    (set-class! controls-div "controls-div")
+    (append! cycle-element node-div)
+    (set-class! fader-assign-handle "slider-handle")
+    (set-style! fader-assign-handle
+                :position "relative"
+                :top "5px"
+                :display "table-cell")
+    (append! cycle-element fader-assign-handle)
+    (append! cycle-element decrement-nodes)
+    (append! cycle-element increment-nodes)
+    (swap! nodes doall)
     (doall
-      (map (fn [node] (append! cycle-element (:svg-element node))) nodes))
+      (map (fn [node] (append! node-div (:element node))) @nodes)) 
     {:cycle-element cycle-element
+     :node-div node-div
      :nodes nodes
      :freq freq
      :tick! tick!

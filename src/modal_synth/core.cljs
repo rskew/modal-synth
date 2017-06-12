@@ -42,8 +42,6 @@
 
 ;audio in
 
-;analyser bar mouse grab highlight fix off
-
 ;narrower faders
 
 ;try compressor on master only
@@ -99,7 +97,6 @@
                                      (:highpass-cutoff channel1-state)
                                      (:lowpass-cutoff channel1-state)
                                      "channel1"))
-  (println "just created channel1 not cycle, gain state: " @(:state (:gain channel1)))
   (defonce channel1-cycle-state (channel/init-channel-state! 0.8 1 0.3 0.7
                                               nil))
   (def channel1-cycle (channel-dom/create-cycle! (:gain channel1-cycle-state)
@@ -107,7 +104,6 @@
                                                  (:highpass-cutoff channel1-cycle-state)
                                                  (:lowpass-cutoff channel1-cycle-state)
                                                  "channel1"))
-  (println "just created channel1 with cycle, gain state: " @(:state (:gain channel1)))
   (def divider1 (channel-dom/create-divider "divider1"))
   (channel-dom/add-to! (sel1 :body) divider1)
 
@@ -257,13 +253,14 @@
   (append! (sel1 :body) cycles-div)
   (let [cycle-fader1 (:delay channel1-cycle)
         audio-fader-state (:state (:delay channel1))]
-    (defonce cycle1 (cycles/create {:topleft {:x 10 :y 10} :width 200}
+    (defonce cycle1 (cycles/create {:x 10 :y 10}
                                    7
                                    audio-fader-state
                                    cycle-fader1
                                    :freq (atom 10)))
     (append! cycles-div (:cycle-element cycle1))
-    (doall (map (comp (partial fader/init-cycle! cycle-fader1) :svg-element) (:nodes cycle1))))) 
+    (doall (map (partial fader/init-cycle! cycle-fader1) @(:nodes cycle1)))))
+
 
 (defn init-scheduler! []
   (defonce scheduler (event-scheduler/create! audio-context

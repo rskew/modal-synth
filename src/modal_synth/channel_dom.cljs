@@ -75,9 +75,6 @@
     channel))
 
 
-
-
-
 (defn create-divider [id]
   (let [divider-element (create-element :div)]
     (set-class! divider-element "divider")
