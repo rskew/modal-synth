@@ -19,6 +19,12 @@
   (fader/init-bandpass! (:bandpass channel)))
 
 
+(defn init-cycle! [channel]
+  (fader/init-cycle! (:gain channel))
+  (fader/init-cycle! (:delay channel))
+  (fader/init-bandpass! (:bandpass channel)))
+
+
 (defn create-spectrum-vis []
   (let [canvas (create-element :canvas)
         context (-> canvas (.getContext "2d"))]
@@ -72,6 +78,7 @@
     (set-style! (-> channel :delay :box) :visibility "hidden")
     (set-style! (-> channel :bandpass :box) :visibility "hidden")
     (append! (sel1 :body) (:element channel))
+    (init-cycle! channel)
     channel))
 
 

@@ -5,7 +5,7 @@
             [goog.dom :as dom]
             [goog.events :as events]
             [cljs.core.async :refer [<! >! put! chan close! alts!]]
-            [dommy.core :as dommy :refer [sel1 set-style! set-class! create-element append!]]))
+            [dommy.core :as dommy :refer [sel1 set-style! set-class! set-attr! create-element append!]]))
 
 
 (def bandpass-min-bandwidth 0.00)
@@ -65,7 +65,6 @@
               level-moved (/ (- move-x click-x)
                              fader-width)
               level (+ old-val level-moved)]
-          (println "drag scaler called with old-val " old-val ", level-moved " level-moved)
           (cond 
             (>= level 1) 1
             (<= level 0) 0
@@ -74,27 +73,28 @@
 
 (defn mouse-control!
   "Handler for mouse events relating to an element"
-  [element state output-chan & {:keys [mousedown-func mouseup-func]}]
+  [element state & {:keys [mousedown-func mouseup-func mousemove-func]}]
   (let [mousedown-chan (listen element "mousedown")]
     (go (while true
                (let [click-event (<! mousedown-chan)]
                  (when mousedown-func
-                   (mousedown-func element state output-chan))
+                   (mousedown-func element state))
                  (let [move-chan (listen js/window "mousemove")
                        mouseup-chan (listen js/document "mouseup")
                        drag-scaler (make-drag-scaler state click-event)]
-                   (println "made drag scaler with state " @state)
                    (set-style! element
                                :cursor
                                "move")
                    (loop []
                          (alt!
                            move-chan ([move-event]
-                                      (>! output-chan (drag-scaler move-event))
+                                      (when mousemove-func
+                                        (mousemove-func element state))
+                                      (reset! state (drag-scaler move-event))
                                       (recur))
                            mouseup-chan ([]
                                          (when mouseup-func
-                                           (mouseup-func element state output-chan))         
+                                           (mouseup-func element state))         
                                          (close! mouseup-chan)
                                          (close! move-chan)
                                          (set-style! element
@@ -111,34 +111,24 @@
              (fn [key atom old-state new-state]
                  (draw fader)))
   ;; kick start processes to update the state in response to mouse-move inputs
-  (go (while true
-             (let [new-level (<! (:chan fader))]
-               (reset! (:state fader) new-level))))
   ;; kick start processes to listen for mouse inputs
-  (mouse-control! (:handle fader) (:state fader) (:chan fader))
+  (mouse-control! (:handle fader) (:state fader))
+  (set-class! (:bar fader) (str (dommy/class (:bar fader)) " audio-fader"))
   ;; initialise the states to sync up all that depend on them
   (reset! (:state fader) @(:state fader)))
 
 
-(defn init-cycle! [fader cycle-node]
+(defn init-cycle! [fader]
+  ;decouple fader from node
+  ;- mousecontrol goes to cycle-node side
   (add-watch (:state fader)
              :draw-watcher
              (fn [key atom old-state new-state]
                  (draw fader)))
-  (go (while true
-             (let [new-level (<! (:chan fader))]
-               (reset! (:state fader) new-level))))
-  (mouse-control! #_(:svg-element cycle-node)
-                  (:element cycle-node)
-                  (:state fader)
-                  (:chan fader)
-                  :mousedown-func (:mousedown cycle-node)
-                  :mouseup-func (:mouseup cycle-node))
+  (set-class! (:bar fader) (str (dommy/class (:bar fader)) " cycle-fader"))
   ;; hide it!
   (set-style! (:bar fader) :background-color "rgba(0,0,0,0.3)")
-  (set-style! (:box fader) :visibility "hidden")
-  ;; initialise the states to sync up all that depend on them
-  (reset! (:state fader) @(:state fader))) 
+  (set-style! (:box fader) :visibility "hidden"))
 
 
 (defn create [fader-state fader-type]
@@ -151,9 +141,11 @@
                :bar bar
                :handle handle
                :type fader-type}]  
-    (set-class! box "slider")
+    (set-class! box "slider box")
     (set-class! bar "slider-bar")
     (set-class! handle "slider-handle")
+    (set-attr! box
+               :ondragover "event.preventDefault()") 
     (append! box bar)
     (append! box handle)
     fader))
@@ -216,7 +208,7 @@
             :handle-highpass handle-highpass
             :handle-lowpass handle-lowpass 
             :type :Bandpass}]
-    (set-class! box "bandpass")
+    (set-class! box "bandpass box")
     (set-class! bar "bandpass-bar")
     (set-class! bar-upper "bandpass-bar-upper")
     (set-class! bar-lower "bandpass-bar-lower")

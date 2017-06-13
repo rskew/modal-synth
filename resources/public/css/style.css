@@ -4,12 +4,26 @@
     --cycle-node-radius: 5px;
 }
 
+body, div
+{
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: -moz-none;
+    -ms-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+}
+
 .divider {
     position: absolute;
     margin: 12px;
-    width: var(--slider-width);
+    width: calc(var(--slider-width) + 40px);
     height: 7px;
-    background-color: #EEEEEE;
+    background-color: #777777;
+    /*
+    visibility: hidden;
+    */
 }
 
 #divider1 {
@@ -33,16 +47,20 @@
 }
 
 #channel1 {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: 0;
     width: var(--slider-width);
 }
 
 #channel2 {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: var(--channel-height);
     margin: 2px 0 0 0;
@@ -50,8 +68,10 @@
 }
 
 #channel3 {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: calc(2 * var(--channel-height));
     margin: 2px 0 0 0;
@@ -59,8 +79,10 @@
 }
 
 #channel4 {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: calc(3 * var(--channel-height));
     margin: 2px 0 0 0;
@@ -68,22 +90,14 @@
 }
 
 #channel-master {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: calc(90vh - var(--channel-height));
     width: var(--slider-width);
 }
-
-/*
-.channel {
-    z-index 20;
-}
-
-.cycle-channel {
-    z-index: 10;
-}
-*/
 
 .slider {
   position: relative;
@@ -97,7 +111,9 @@
 .slider-bar {
   position: absolute;
   background-color: rgba(50,130,200,0.6);
+  /*
   z-index: 0;
+  */
   width: 50px;
   height: 20px;
 }
@@ -107,7 +123,9 @@
   height: 20px;
   background-color: rgba(119,119,119,0.6);
   position: absolute;
+  /*
   z-index: 10;
+  */
   left: 0;
   top: 0;
   border: 0 none;
@@ -131,7 +149,7 @@
 
 .bandpass-bar {
   position: absolute;
-  z-index: 0;
+  z-index: 10;
   left: 0px;
   width: 50px;
   height: 30px;
@@ -242,9 +260,17 @@
 
 .spectrum-vis {
   position: absolute;
+  /*
   z-index: 0;
+  */
   height: 30px;
   width: calc(var(--slider-width) - 28px);
+  visibility: hidden;
+}
+
+.cycle-channel {
+    position: absolute;
+    z-index: -5;
 }
 
 #cycles {
@@ -253,12 +279,25 @@
     width: 500px;
     left: calc(var(--slider-width) + 100px);
     top: 10px;
+    display: table;
+    border-spacing: 5px 0px;
+}
+
+.cycle {
+}
+
+.node-div {
+}
+
+.controls-div {
+    display: table-row;
 }
 
 .cycle-node {
-    position: absolute;
-    left: 0px;
-    top: 0px;
-    width: calc(2 * var(cycle-node-radius));
+    position: relative;
+    display: table-cell;
+    width: 20px;
+    height: 20px;
     cursor: pointer;
+    background-color: rgba(0,0,0,0.2);
 }

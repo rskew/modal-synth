@@ -13,42 +13,35 @@
             [cljs.core.async :refer [<! >! put! chan close! alts! timeout]]))
 
 
-;add/remove nodes
-
-;assign to fader
-;- grab fader-selection-symbol and drag onto fader?
-;  - make fader-selection-symbol draggable
-;  - set faders  with ondragover, ondrop easy peasy
-
 ;set tempo
+;- up and down arrows?
 
-;radius of node in pixels
-(def node-radius 14)
-
-
-(defn arrange [{:keys [x y]} n]
-  (let [width 400
-        angles (map #(/ (* 2. Math/PI %) n) (range n))
-        radius (- (/ width 2) node-radius)
-        angle-to-pos (fn [angle] {:x (+ (* radius (Math/sin angle)) x (/ width 2))
-                                  :y (+ (* radius (- (Math/cos angle))) y (/ width 2))})]
-    (map angle-to-pos angles)))
+;make more/less cycles
+;- plus and minus next to master
 
 
-(defn make-node [audio-fader-state cycle-fader]
+(defn make-node [audio-fader cycle-fader]
   (let [node-element (create-element :div)
-        node-state (atom @audio-fader-state)]
+        node-state (atom @(:state @audio-fader))]
     (set-class! node-element "cycle-node")
-    (let [mousedown (fn [element state output-chan]
-                        (reset! state @node-state)
-                        (set-style! (:box cycle-fader) :visibility "visible"))
-          mouseup (fn [element state output-chan]
-                      (reset! node-state @state)
-                      (set-style! (:box cycle-fader) :visibility "hidden"))]
+    (let [mousedown (fn [element state]
+                        (when @cycle-fader
+                          (reset! (:state @cycle-fader) @state)
+                          (set-style! (:box @cycle-fader) :visibility "visible")))
+          mouseup (fn [element state]
+                      (when @cycle-fader
+                        (reset! state @(:state @cycle-fader))
+                        (set-style! (:box @cycle-fader) :visibility "hidden")))
+          mousemove (fn [element state]
+                        (when @cycle-fader
+                          (reset! (:state @cycle-fader) @state)))]
+      (fader/mouse-control! node-element
+                            node-state
+                            :mousedown-func mousedown
+                            :mouseup-func mouseup
+                            :mousemove-func mousemove)
       {:element node-element
-       :state node-state
-       :mouseup mouseup
-       :mousedown mousedown})))
+       :state node-state})))
 
 
 (defn deactivate-node! [{:keys [element]}]
@@ -59,7 +52,7 @@
   (set-style! element :background-color "rgba(50,130,200,0.6)"))
 
 
-(defn make-ticker [nodes audio-fader-state]
+(defn make-ticker [nodes audio-fader]
   (let [active-node-index (atom 0)]
     (fn [event-fire-time]
         ;; turn current active node off
@@ -70,7 +63,7 @@
         ;; activate next node
         (when (< @active-node-index (count @nodes))
           (activate-node! (nth @nodes @active-node-index))
-          (reset! audio-fader-state @(:state (nth @nodes @active-node-index)))))))
+          (reset! (:state @audio-fader) @(:state (nth @nodes @active-node-index)))))))
 
 
 (defn calc-next-tick-time [cycle-freq]
@@ -79,12 +72,11 @@
          (/ 1. @cycle-freq))))
 
 
-(defn add-node! [cycle- audio-fader-state cycle-fader]
-  (let [new-node (make-node audio-fader-state cycle-fader)
+(defn add-node! [cycle- audio-fader cycle-fader]
+  (let [new-node (make-node audio-fader cycle-fader)
         last-node (last @(:nodes cycle-))]
     (reset! (:state new-node) @(:state last-node))
     (append! (:node-div cycle-) (:element new-node))
-    (fader/init-cycle! cycle-fader new-node)  
     (swap! (:nodes cycle-) conj new-node)))
 
 
@@ -94,7 +86,7 @@
     (swap! nodes #(vec (drop-last %)))))
 
 
-(defn make-increment-element [nodes node-div audio-fader-state cycle-fader]
+(defn make-increment-element [nodes node-div audio-fader cycle-fader]
   (let [element (create-element :div)
         horizontal (create-element :div)  
         vertical (create-element :div)]
@@ -104,7 +96,7 @@
                 :display "table-cell"
                 :position "relative")
     (set-attr! element
-               :onmousedown #(add-node! {:nodes nodes :node-div node-div} audio-fader-state cycle-fader))
+               :onmousedown #(add-node! {:nodes nodes :node-div node-div} audio-fader cycle-fader))
     (append! element horizontal)
     (set-style! horizontal
                 :background-color "black"
@@ -142,16 +134,22 @@
     element))
 
 
-(defn create [topleft n audio-fader-state cycle-fader & {:keys [freq]
-                       :or {freq 0.5}}]
+(defn create [topleft n audio-fader cycle-fader drag-and-drop-cycle & {:keys [freq]
+                                                                       :or {freq 0.5}}]
   (let [cycle-element (create-element :div)
         node-div (create-element :div)
-        nodes (atom (vec (for [_ (range n)] (make-node audio-fader-state cycle-fader))))
+        cycle-fader-wrap (atom cycle-fader)
+        audio-fader-wrap (atom audio-fader)
+        nodes (atom (vec (for [_ (range n)] (make-node audio-fader-wrap cycle-fader-wrap))))
         controls-div (create-element :div)
         fader-assign-handle (create-element :div)
         decrement-nodes (make-decrement-element nodes)
-        increment-nodes (make-increment-element nodes node-div audio-fader-state cycle-fader)
-        tick! (make-ticker nodes audio-fader-state)]
+        increment-nodes (make-increment-element nodes
+                                                node-div
+                                                audio-fader-wrap
+                                                cycle-fader-wrap)
+        tick! (make-ticker nodes audio-fader-wrap)
+        dragstart-chan (listen fader-assign-handle "dragstart")]
     (set-class! cycle-element "cycle")
     (set-class! node-div "node-div")
     (set-class! controls-div "controls-div")
@@ -161,15 +159,25 @@
                 :position "relative"
                 :top "5px"
                 :display "table-cell")
+    (set-attr! fader-assign-handle
+               :draggable "true")
+    (go (while true
+               (let [event (<! dragstart-chan)
+                     dragend-chan (listen fader-assign-handle "dragend")]
+                 (reset! drag-and-drop-cycle {:audio-fader audio-fader-wrap
+                                              :cycle-fader cycle-fader-wrap})
+                 (<! dragend-chan)
+                 (reset! drag-and-drop-cycle nil))))
     (append! cycle-element fader-assign-handle)
     (append! cycle-element decrement-nodes)
     (append! cycle-element increment-nodes)
     (swap! nodes doall)
     (doall
       (map (fn [node] (append! node-div (:element node))) @nodes)) 
-    {:cycle-element cycle-element
+    {:element cycle-element
      :node-div node-div
      :nodes nodes
      :freq freq
      :tick! tick!
-     :cycle-fader cycle-fader}))
+     :cycle-fader cycle-fader-wrap
+     :audio-fader audio-fader-wrap}))

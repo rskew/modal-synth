@@ -12,7 +12,7 @@
             [modal-synth.scheduler :as event-scheduler]
             [goog.dom :as dom]
             [goog.events :as events]
-            [dommy.core :as dommy :refer [sel1 append! parent replace! create-element set-attr! set-style!]]
+            [dommy.core :as dommy :refer [sel1 sel append! parent replace! create-element set-attr! set-style!]]
             [cljs.core.async :refer [<! >! put! chan close! alts!]]))
 
 
@@ -248,18 +248,46 @@
                            :audio-context audio-context}))
 
 (defn init-cycles! []
-  (defonce cycles-div (create-element :div))
-  (set-attr! cycles-div :id "cycles")
-  (append! (sel1 :body) cycles-div)
   (let [cycle-fader1 (:delay channel1-cycle)
-        audio-fader-state (:state (:delay channel1))]
+        audio-fader1 (:delay channel1)
+        drag-and-drop-cycle (atom nil)]
+    (defonce cycles-div (create-element :div))
+    (set-attr! cycles-div :id "cycles")
+    (append! (sel1 :body) cycles-div)
     (defonce cycle1 (cycles/create {:x 10 :y 10}
                                    7
-                                   audio-fader-state
+                                   audio-fader1
                                    cycle-fader1
+                                   drag-and-drop-cycle
                                    :freq (atom 10)))
-    (append! cycles-div (:cycle-element cycle1))
-    (doall (map (partial fader/init-cycle! cycle-fader1) @(:nodes cycle1)))))
+    (append! cycles-div (:element cycle1))
+    (let [fader-pairs [{:audio-fader (:gain channel1)
+                        :cycle-fader (:gain channel1-cycle)}
+                       {:audio-fader (:delay channel1)
+                        :cycle-fader (:delay channel1-cycle)}]]
+      (doall (map (fn [{:keys [audio-fader cycle-fader]}]
+                      (let [drop-chan (listen (:box audio-fader) "drop")]
+                        (go (while true
+                                   (let [event (<! drop-chan)]
+                                     (when @drag-and-drop-cycle
+                                       (reset! (:audio-fader @drag-and-drop-cycle) audio-fader)
+                                       (reset! (:cycle-fader @drag-and-drop-cycle) cycle-fader)
+                                       (let [dragleave-event (.createEvent js/document "HTMLEvents")]
+                                         (.initEvent dragleave-event "dragleave" false true)
+                                         (.dispatchEvent (:box audio-fader) dragleave-event))))))))
+                  fader-pairs))
+      (doall (map (fn [{:keys [audio-fader cycle-fader]}]
+                      (let [dragenter-chan (listen (:box audio-fader) "dragenter")]
+                        (go (while true
+                                   (let [event (<! dragenter-chan)
+                                         dragleave-chan (listen (:box audio-fader) "dragleave")]
+                                     (when @drag-and-drop-cycle
+                                       (set-style! (:box audio-fader)
+                                                   :background-color "rgba(255,0,0,0.2)"))
+                                     (<! dragleave-chan)
+                                     (set-style! (:box audio-fader)
+                                                 :background-color "rgba(255,0,0,0.0)"))))))
+                  fader-pairs)))))
 
 
 (defn init-scheduler! []
