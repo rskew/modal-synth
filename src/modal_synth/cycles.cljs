@@ -7,17 +7,11 @@
             [modal-synth.channel :as channel]
             [modal-synth.keyboard-control :as keyboard-control]
             [modal-synth.spectro-vis :as spectro-vis]
+            [modal-synth.scheduler :as event-scheduler]
             [goog.dom :as dom]
             [goog.events :as events]
             [dommy.core :as dommy :refer [create-element sel1 append! set-attr! set-class! set-style! attr remove!]]
             [cljs.core.async :refer [<! >! put! chan close! alts! timeout]]))
-
-
-;set tempo
-;- up and down arrows?
-
-;make more/less cycles
-;- plus and minus next to master
 
 
 (defn make-node [audio-fader cycle-fader]
@@ -27,10 +21,12 @@
     (let [mousedown (fn [element state]
                         (when @cycle-fader
                           (reset! (:state @cycle-fader) @state)
+                          (set-style! node-element :border "1px solid rgba(50,130,200,0.6)")  
                           (set-style! (:box @cycle-fader) :visibility "visible")))
           mouseup (fn [element state]
                       (when @cycle-fader
                         (reset! state @(:state @cycle-fader))
+                        (set-style! node-element :border "1px solid white")  
                         (set-style! (:box @cycle-fader) :visibility "hidden")))
           mousemove (fn [element state]
                         (when @cycle-fader
@@ -52,30 +48,55 @@
   (set-style! element :background-color "rgba(50,130,200,0.6)"))
 
 
-(defn make-ticker [nodes audio-fader]
+(defn smooth-transition [audio-fader move-to start-time end-time]
+  (let [offset @(:state @audio-fader)
+        gradient (/ (- move-to offset)
+                    (- end-time start-time))]
+    (fn [at-time]
+      (let [new-fader-val (+ (* gradient (- at-time start-time))
+                             offset)
+            next-infinitesimal-moment (+ at-time 0.01)]
+        (if (< at-time end-time)
+          (do
+            (reset! (:state @audio-fader) new-fader-val)
+            next-infinitesimal-moment)    
+          nil)))))
+
+
+(defn make-ticker [scheduler nodes audio-fader freq smooth]
   (let [active-node-index (atom 0)]
     (fn [event-fire-time]
-        ;; turn current active node off
-        (when (< @active-node-index (count @nodes))
-          (deactivate-node! (nth @nodes @active-node-index)))
-        ;; increment active-node-index
-        (swap! active-node-index #(mod (inc %) (count @nodes)))
-        ;; activate next node
-        (when (< @active-node-index (count @nodes))
-          (activate-node! (nth @nodes @active-node-index))
-          (reset! (:state @audio-fader) @(:state (nth @nodes @active-node-index)))))))
-
-
-(defn calc-next-tick-time [cycle-freq]
-  (fn [at-time]
-      (+ at-time
-         (/ 1. @cycle-freq))))
+        (let [next-event-time (+ event-fire-time
+                                 (/ 1. @freq))]
+          ;; turn current active node off
+          (when (< @active-node-index (count @nodes))
+            (deactivate-node! (nth @nodes @active-node-index)))
+          ;; increment active-node-index
+          (if (> (count @nodes)
+                 0)
+            (swap! active-node-index #(mod (inc %) (count @nodes))) 
+            (reset! active-node-index 0))
+          ;; activate next node
+          (when (< @active-node-index (count @nodes))
+            (activate-node! (nth @nodes @active-node-index))
+            (if @smooth
+              (event-scheduler/recursion-through-time! scheduler
+                                                       (smooth-transition audio-fader
+                                                                          @(:state (nth @nodes @active-node-index))
+                                                                          event-fire-time
+                                                                          next-event-time)
+                                                       event-fire-time)
+              (reset! (:state @audio-fader) @(:state (nth @nodes @active-node-index)))))
+          next-event-time))))
 
 
 (defn add-node! [cycle- audio-fader cycle-fader]
-  (let [new-node (make-node audio-fader cycle-fader)
-        last-node (last @(:nodes cycle-))]
-    (reset! (:state new-node) @(:state last-node))
+  (let [new-node (make-node audio-fader cycle-fader)]
+    (if-let [last-node (last @(:nodes cycle-))] 
+      (reset! (:state new-node) @(:state last-node))
+      (if @audio-fader
+        (reset! (:state new-node) @(:state @audio-fader))   
+        (reset! (:state new-node) 0))) 
     (append! (:node-div cycle-) (:element new-node))
     (swap! (:nodes cycle-) conj new-node)))
 
@@ -134,7 +155,7 @@
     element))
 
 
-(defn create [topleft n audio-fader cycle-fader drag-and-drop-cycle & {:keys [freq]
+(defn create [topleft n audio-fader cycle-fader drag-and-drop-cycle scheduler & {:keys [freq]
                                                                        :or {freq 0.5}}]
   (let [cycle-element (create-element :div)
         node-div (create-element :div)
@@ -148,7 +169,8 @@
                                                 node-div
                                                 audio-fader-wrap
                                                 cycle-fader-wrap)
-        tick! (make-ticker nodes audio-fader-wrap)
+        smooth (atom true)
+        tick! (make-ticker scheduler nodes audio-fader-wrap freq smooth)
         dragstart-chan (listen fader-assign-handle "dragstart")]
     (set-class! cycle-element "cycle")
     (set-class! node-div "node-div")
@@ -180,4 +202,5 @@
      :freq freq
      :tick! tick!
      :cycle-fader cycle-fader-wrap
-     :audio-fader audio-fader-wrap}))
+     :audio-fader audio-fader-wrap
+     :smooth smooth}))

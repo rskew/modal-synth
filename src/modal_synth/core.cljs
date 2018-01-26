@@ -1,7 +1,6 @@
 (ns modal-synth.core
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
-  (:require [modal-synth.utils :refer [listen
-                                       set-html!]]
+  (:require [modal-synth.utils :refer [listen]]
             [modal-synth.channel :as channel]
             [modal-synth.channel-dom :as channel-dom]
             [modal-synth.fader :as fader]
@@ -15,75 +14,9 @@
             [dommy.core :as dommy :refer [sel1 sel append! parent replace! create-element set-attr! set-style!]]
             [cljs.core.async :refer [<! >! put! chan close! alts!]]))
 
-
-;'clocks' multiple cycles, all tick together but have different number of positions
-; - direct product of cyclic groups
-;;- draw concept clock and think through use
-;;- event timing
-;  - schedule timer based on setTimeout, schedules upcoming web audio events
-;    - schedules interface changes with more setTimouts
-;;- visualisation interface
-;  - create clock
-;  - assign to fader
-;  - clock shape, clickable nodes and links
-;  - variable number of nodes
-;    - +/- node buttons inside?
-;;- master clock tempo
-;  - variable time clocks
-;    - adjustable integer multiple of master period
-;;- click on node
-;  - fader highlighted, shows position for that node, can change
-;  - unclick for back to normal (or click away)
-;  - right click sets node as next active node?
-;;- link between successive nodes can be set to discrete/continuous
-;  - shown by dashed or continuous line
-;  - continuous link: discretize into small segments
-;    - segment size found by what's efficient, smooth
-
-;audio in
-
-;narrower faders
-
-;try compressor on master only
-; - w large delays also
-
-;keyboard control
-;select fader w keyboard
-; - highlight
-; - send to pos
-;send fader to pos over time
-; - setInterval()
-;reverb
-;adsr keyboard
-; - with sliders for a, d, s, r
-;master channel spectrum vis
-;channel spectrum vis
-;save states
-;morph between states
-; - morph time
-; - morph curve (eg linear, step)
-
-;signal flow shown visually
-;(no sequencer vis, only go by feel)
-;control system to regulate amplitude between decay/saturation
-;animate faders
-; - sin wave slow perturbation to all params
-;event oscillator
-; - polyrythms?
-;chopper/tremolo (discourse)
-;fullscreen
-;rainmask into modal synth
-; - audio pipe utility page?
-;come back from sleep
-;soft beat cycles from compressor?
-;- vis compressor gain
-
-
 (enable-console-print!)
 
-
 (defonce audio-context (webaudio/create-audio-context))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;; Make the channels
@@ -91,14 +24,14 @@
 (defn init-channels! []
   (defonce channel1-audio (channel/make-channel-audio audio-context))
   (defonce channel1-state (channel/init-channel-state! 0.2 0.46 0 1
-                                              channel1-audio))
+                                                       channel1-audio))
   (def channel1 (channel-dom/create! (:gain channel1-state)
                                      (:delay-time channel1-state)
                                      (:highpass-cutoff channel1-state)
                                      (:lowpass-cutoff channel1-state)
                                      "channel1"))
   (defonce channel1-cycle-state (channel/init-channel-state! 0.8 1 0.3 0.7
-                                              nil))
+                                                             nil))
   (def channel1-cycle (channel-dom/create-cycle! (:gain channel1-cycle-state)
                                                  (:delay-time channel1-cycle-state)
                                                  (:highpass-cutoff channel1-cycle-state)
@@ -112,38 +45,29 @@
       :spectrum-vis
       :context
       (doto
-        (-> .-fillStyle
-            (set! "rgb(200, 0, 0)"))
-        (.fillRect 0 0 11635 1135)))
-
-
-  (defonce channel2-audio (channel/make-channel-audio audio-context))
+       (-> .-fillStyle
+           (set! "rgb(200, 0, 0)"))
+        (.fillRect 0 0 11635 1135))) (defonce channel2-audio (channel/make-channel-audio audio-context))
   (defonce channel2-state (channel/init-channel-state! 0.7 0.73 0.5 1
-                                              channel2-audio))
+                                                       channel2-audio))
   (def channel2 (channel-dom/create! (:gain channel2-state)
                                      (:delay-time channel2-state)
                                      (:highpass-cutoff channel2-state)
                                      (:lowpass-cutoff channel2-state)
                                      "channel2"))
   (def divider2 (channel-dom/create-divider "divider2"))
-  (channel-dom/add-to! (sel1 :body) divider2)
-
-
-  (defonce channel3-audio (channel/make-channel-audio audio-context))
+  (channel-dom/add-to! (sel1 :body) divider2) (defonce channel3-audio (channel/make-channel-audio audio-context))
   (defonce channel3-state (channel/init-channel-state! 0.8 0.12 0.2 0.6
-                                              channel3-audio))
+                                                       channel3-audio))
   (def channel3 (channel-dom/create! (:gain channel3-state)
                                      (:delay-time channel3-state)
                                      (:highpass-cutoff channel3-state)
                                      (:lowpass-cutoff channel3-state)
                                      "channel3"))
   (def divider3 (channel-dom/create-divider "divider3"))
-  (channel-dom/add-to! (sel1 :body) divider3)
-
-
-  (defonce channel4-audio (channel/make-channel-audio audio-context))
+  (channel-dom/add-to! (sel1 :body) divider3) (defonce channel4-audio (channel/make-channel-audio audio-context))
   (defonce channel4-state (channel/init-channel-state! 0.8 0.3 0 0.4
-                                              channel4-audio))
+                                                       channel4-audio))
   (def channel4 (channel-dom/create! (:gain channel4-state)
                                      (:delay-time channel4-state)
                                      (:highpass-cutoff channel4-state)
@@ -153,12 +77,9 @@
   (def divider-master1 (channel-dom/create-divider "divider-master1"))
   (channel-dom/add-to! (sel1 :body) divider-master1)
   (def divider-master2 (channel-dom/create-divider "divider-master2"))
-  (channel-dom/add-to! (sel1 :body) divider-master2)
-
-
-  (defonce channel-master-audio (channel/make-channel-audio audio-context))
+  (channel-dom/add-to! (sel1 :body) divider-master2) (defonce channel-master-audio (channel/make-channel-audio audio-context))
   (defonce channel-master-state (channel/init-channel-state! 0.7 0.13 0 1
-                                                    channel-master-audio))
+                                                             channel-master-audio))
   (def channel-master (channel-dom/create! (:gain channel-master-state)
                                            (:delay-time channel-master-state)
                                            (:highpass-cutoff channel-master-state)
@@ -180,6 +101,21 @@
 
   (webaudio/connect! (:graph channel-master-audio)
                      (webaudio/destination audio-context))
+
+  (.then (.getUserMedia (.-mediaDevices js/navigator)
+                        (js-obj "audio" true "video:" false))
+         (fn [stream]
+           (let [audio-stream-node
+                 (.createMediaStreamSource audio-context stream)
+                 input {:input-node nil
+                        :output-node audio-stream-node
+                        :type :Fanin}]
+             (webaudio/connect! input
+                                (:graph channel2-audio)))))
+                                ;[(:graph channel1-audio)
+                                ; (:graph channel2-audio)
+                                ; (:graph channel3-audio)
+                                ; (:graph channel4-audio)]))))
 
   ; Start analysis loop
   ; - requestAnimationFrame
@@ -209,16 +145,13 @@
   (add-watch noise-gain-state
              :noise-gain-watcher
              (channel/make-watcher noise-osc
-                           webaudio/set-gain!
-                           identity))
-
-
-  ;;; Make the saw osc for bowing the resonator
+                                   webaudio/set-gain!
+                                   identity));;; Make the saw osc for bowing the resonator
   (defonce bow-osc
-    (let [osc-node (webaudio/make-osc 
-                     40
-                     audio-context
-                     :osc-type "sawtooth")]
+    (let [osc-node (webaudio/make-osc
+                    40
+                    audio-context
+                    :osc-type "sawtooth")]
       (webaudio/osc-start! osc-node (webaudio/get-now audio-context))
       osc-node))
   (defonce bow-gain (webaudio/make-gain 0 audio-context))
@@ -232,8 +165,8 @@
   (add-watch bow-gain-state
              :bow-gain-watcher
              (channel/make-watcher bow-osc
-                           webaudio/set-gain!
-                           identity)))
+                                   webaudio/set-gain!
+                                   identity)))
 
 (defn init-keyboard-control! []
   (keyboard-control/init! {:channel-states {:1 channel1-state
@@ -247,6 +180,11 @@
                            :bow-gain bow-gain
                            :audio-context audio-context}))
 
+(defn init-scheduler! []
+  (defonce scheduler (event-scheduler/create! audio-context
+                                              :lookahead 0.03
+                                              :period 3)))
+
 (defn init-cycles! []
   (let [cycle-fader1 (:delay channel1-cycle)
         audio-fader1 (:delay channel1)
@@ -259,6 +197,7 @@
                                    audio-fader1
                                    cycle-fader1
                                    drag-and-drop-cycle
+                                   scheduler
                                    :freq (atom 10)))
     (append! cycles-div (:element cycle1))
     (let [fader-pairs [{:audio-fader (:gain channel1)
@@ -266,48 +205,40 @@
                        {:audio-fader (:delay channel1)
                         :cycle-fader (:delay channel1-cycle)}]]
       (doall (map (fn [{:keys [audio-fader cycle-fader]}]
-                      (let [drop-chan (listen (:box audio-fader) "drop")]
-                        (go (while true
-                                   (let [event (<! drop-chan)]
-                                     (when @drag-and-drop-cycle
-                                       (reset! (:audio-fader @drag-and-drop-cycle) audio-fader)
-                                       (reset! (:cycle-fader @drag-and-drop-cycle) cycle-fader)
-                                       (let [dragleave-event (.createEvent js/document "HTMLEvents")]
-                                         (.initEvent dragleave-event "dragleave" false true)
-                                         (.dispatchEvent (:box audio-fader) dragleave-event))))))))
+                    (let [drop-chan (listen (:box audio-fader) "drop")]
+                      (go (while true
+                            (let [event (<! drop-chan)]
+                              (when @drag-and-drop-cycle
+                                (reset! (:audio-fader @drag-and-drop-cycle) audio-fader)
+                                (reset! (:cycle-fader @drag-and-drop-cycle) cycle-fader)
+                                (let [dragleave-event (.createEvent js/document "HTMLEvents")]
+                                  (.initEvent dragleave-event "dragleave" false true)
+                                  (.dispatchEvent (:box audio-fader) dragleave-event))))))))
                   fader-pairs))
       (doall (map (fn [{:keys [audio-fader cycle-fader]}]
-                      (let [dragenter-chan (listen (:box audio-fader) "dragenter")]
-                        (go (while true
-                                   (let [event (<! dragenter-chan)
-                                         dragleave-chan (listen (:box audio-fader) "dragleave")]
-                                     (when @drag-and-drop-cycle
-                                       (set-style! (:box audio-fader)
-                                                   :background-color "rgba(255,0,0,0.2)"))
-                                     (<! dragleave-chan)
-                                     (set-style! (:box audio-fader)
-                                                 :background-color "rgba(255,0,0,0.0)"))))))
-                  fader-pairs)))))
-
-
-(defn init-scheduler! []
-  (defonce scheduler (event-scheduler/create! audio-context
-                                              :lookahead 0.03
-                                              :period 3))
-  (event-scheduler/recursion-through-time! scheduler
-                                          (:tick! cycle1)
-                                          (cycles/calc-next-tick-time (:freq cycle1))
-                                          (.-currentTime audio-context)))
+                    (let [dragenter-chan (listen (:box audio-fader) "dragenter")]
+                      (go (while true
+                            (let [event (<! dragenter-chan)
+                                  dragleave-chan (listen (:box audio-fader) "dragleave")]
+                              (when @drag-and-drop-cycle
+                                (set-style! (:box audio-fader)
+                                            :background-color "rgba(255,0,0,0.2)"))
+                              (<! dragleave-chan)
+                              (set-style! (:box audio-fader)
+                                          :background-color "rgba(255,0,0,0.0)"))))))
+                  fader-pairs))
+      (event-scheduler/recursion-through-time! scheduler
+                                               (:tick! cycle1)
+                                               (.-currentTime audio-context)))))
 
 (defn main []
   (init-channels!)
   (connect-audio-nodes!)
   (init-keyboard-control!)
-  (init-cycles!)
-  (init-scheduler!))
-
+  (init-scheduler!)
+  (init-cycles!))
 
 (.addEventListener
-  js/window
-  "DOMContentLoaded"
-  main)
+ js/window
+ "DOMContentLoaded"
+ main)

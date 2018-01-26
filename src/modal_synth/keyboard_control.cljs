@@ -142,7 +142,11 @@
                                  (if (nil? keydown-command)
                                    (do
                                      (print key-code-keyword)
-                                     (fire-noise-ar! synth-state))
+                                     ;; fire noise if a key other than
+                                     ;;  alt, ctrl, t, r, windows, 0-9 is pressed
+                                     (when-not (#{:18 :91 :17 :82 :84 :27 :48 :49
+                                                  :50 :51 :52 :53 :54 :55 :56 :57} key-code-keyword)
+                                               (fire-noise-ar! synth-state)))
                                    (when (= @key-state :up)
                                      (reset! key-state :down)
                                      (keydown-command synth-state)))))

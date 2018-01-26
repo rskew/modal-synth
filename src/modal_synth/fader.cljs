@@ -1,7 +1,6 @@
 (ns modal-synth.fader
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
-  (:require [modal-synth.utils :refer [listen
-                                       set-html! ]]
+  (:require [modal-synth.utils :refer [listen]]
             [goog.dom :as dom]
             [goog.events :as events]
             [cljs.core.async :refer [<! >! put! chan close! alts!]]

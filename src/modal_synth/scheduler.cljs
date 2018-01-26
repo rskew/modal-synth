@@ -34,7 +34,6 @@
     (go-loop []
              (let [now (.-currentTime audio-context)]
                (while (next-event-within-horizon? scheduler now)
-                      #_(println "scheduling event , now= " (.-currentTime audio-context))
                       (let [event (first @(:queue scheduler))]
                         (swap! (:queue scheduler) rest) 
                         ((:callback! event) (:time event))))
@@ -51,14 +50,20 @@
 
 
 (defn recursion-through-time!
-  "Ripping off Extempore :)"
-  [scheduler callback! calc-next-time at-time]
-  (let [recursive-wrapper! (fn [self callback! at-time]
-                               (call-at-time! scheduler
-                                              callback!
-                                              at-time)
-                               (call-at-time! scheduler
-                                              (partial self self callback!)
-                                              (calc-next-time at-time)))]
-    (call-at-time! scheduler callback! at-time)
-    (call-at-time! scheduler (partial recursive-wrapper! recursive-wrapper! callback!) at-time)))  
+  "Ripping off Extempore :)
+   callback! must return the time it should be called next,
+    or nil for end of sequence."
+  [scheduler callback! at-time]
+  (let [recursive-wrapper!
+        (fn [self scheduler callback!]
+            (fn [at-time]
+                (let [next-time (callback! at-time)]
+                  (when next-time
+                    (call-at-time! scheduler
+                                   (self self scheduler callback!)
+                                   next-time)))))]
+    (call-at-time! scheduler
+                   (recursive-wrapper! recursive-wrapper!
+                                       scheduler
+                                       callback!)
+                   at-time)))

@@ -106,21 +106,21 @@
                    :gain-watcher
                    (make-watcher (:gain-graph channel-audio)
                                  webaudio/set-gain!
-                                 gain-mapping)) 
+                                 gain-mapping))
         (add-watch (:delay-time aug-channel-state)
                    :delay-watcher
                    (make-watcher (:delay-graph channel-audio)
                                  webaudio/set-delay-time!
-                                 delay-mapping))  
+                                 delay-mapping))
         (add-watch (:lowpass-cutoff aug-channel-state)
                    :lowpass-cutoff-watcher
                    (make-watcher (:bandpass-graph channel-audio)
                                  webaudio/set-lowpass-cutoff!
-                                 lowpass-cutoff-mapping))  
+                                 lowpass-cutoff-mapping))
         (add-watch (:highpass-cutoff aug-channel-state)
                    :highpass-cutoff-watcher
                    (make-watcher (:bandpass-graph channel-audio)
                                  webaudio/set-highpass-cutoff!
-                                 highpass-cutoff-mapping))  
+                                 highpass-cutoff-mapping))
         aug-channel-state)
       channel-state)))

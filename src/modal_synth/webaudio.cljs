@@ -1,7 +1,6 @@
 (ns modal-synth.webaudio
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
-  (:require [cljs.core.async :refer [<! >! put! chan close! alts! poll!]]
-            [modal-synth.utils :refer [smooth-array!]]))
+  (:require [cljs.core.async :refer [<! >! put! chan close! alts! poll!]]))
 
 
 (defn create-audio-context []
