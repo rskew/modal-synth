@@ -1,24 +1,17 @@
 (ns modal-synth.fader
   (:require-macros [cljs.core.async.macros :refer [go alt!]])
-  (:require [modal-synth.utils :refer [listen
-                                       set-html! ]]
+  (:require [modal-synth.utils :refer [listen]]
             [goog.dom :as dom]
             [goog.events :as events]
             [cljs.core.async :refer [<! >! put! chan close! alts!]]
-            [dommy.core :as dommy :refer [sel1 set-style! set-class! create-element append!]]))
+            [dommy.core :as dommy :refer [sel1 set-style! set-class! set-attr! create-element append!]]))
 
-
-;(defn getAbsolutePositionLeft [elt]
-;  "not used"
-;  (loop [element elt x 0]
-;        (if (.-offsetParent element)
-;          (recur (.-offsetParent element) (+ x (.-offsetLeft element)))
-;          x)))
 
 (def bandpass-min-bandwidth 0.00)
 
 
 (defmulti draw :type)
+
 
 (defn draw-standard [fader]
   (let [fader-width (dommy/px (:box fader) :width)
@@ -30,11 +23,14 @@
                 :left
                 (str (+ handle-pos 1) "px"))))
 
+
 (defmethod draw :Gain [fader]
   (draw-standard fader))
 
+
 (defmethod draw :Delay [fader]
   (draw-standard fader))
+
 
 (defmethod draw :Bandpass [bp]
   (let [fader-width (dommy/px (:box bp) :width)
@@ -56,9 +52,10 @@
                 (str (- bar-right bar-left) "px"))))
   
 
-(defn make-drag-scaler [state click-event]
+(defn make-drag-scaler 
   "Make closure to calculate the amount the fader should move
   due to the change in mouse pos"
+  [state click-event]
   (let [click-x  (.-clientX click-event)
         fader-width (dommy/px (sel1 :#channel1) :width)
         old-val @state]
@@ -73,11 +70,14 @@
             :else level)))))
 
 
-(defn mouse-control [element state chan]
+(defn mouse-control!
   "Handler for mouse events relating to an element"
+  [element state & {:keys [mousedown-func mouseup-func mousemove-func]}]
   (let [mousedown-chan (listen element "mousedown")]
     (go (while true
                (let [click-event (<! mousedown-chan)]
+                 (when mousedown-func
+                   (mousedown-func element state))
                  (let [move-chan (listen js/window "mousemove")
                        mouseup-chan (listen js/document "mouseup")
                        drag-scaler (make-drag-scaler state click-event)]
@@ -87,9 +87,13 @@
                    (loop []
                          (alt!
                            move-chan ([move-event]
-                                      (>! chan (drag-scaler move-event))
+                                      (when mousemove-func
+                                        (mousemove-func element state))
+                                      (reset! state (drag-scaler move-event))
                                       (recur))
                            mouseup-chan ([]
+                                         (when mouseup-func
+                                           (mouseup-func element state))         
                                          (close! mouseup-chan)
                                          (close! move-chan)
                                          (set-style! element
@@ -97,59 +101,59 @@
                                                      "pointer"))))))))))
 
 
-;(defn create [elements fader-state fader-type]
-;  "Initialise fader object, start 'go' block for updating state"
-;  (let [receive-chan (chan)
-;        bar (:bar elements)
-;        box (:box elements)
-;        handle (:handle elements)]
-;    {:state fader-state
-;     :chan receive-chan
-;     :bar bar
-;     :handle handle
-;     :box box
-;     :type fader-type}))
-
-
-(defn init [fader]
-  ;re-draw the faders whenever the state is updated,
-  ; by mouse or by automation
+(defn init!
+  "re-draw the faders whenever the state is updated,
+  by mouse or by automation"
+  [fader]
   (add-watch (:state fader)
              :draw-watcher
              (fn [key atom old-state new-state]
                  (draw fader)))
-  ;kick start processes to update the state in response to mouse-move inputs
-  (go (while true
-             (let [new-level (<! (:chan fader))]
-               (reset! (:state fader) new-level))))
-  ;kick start processes to listen for mouse inputs
-  (mouse-control (:handle fader) (:state fader) (:chan fader))
-  ;initialise the states to sync up all that depend on them
+  ;; kick start processes to update the state in response to mouse-move inputs
+  ;; kick start processes to listen for mouse inputs
+  (mouse-control! (:handle fader) (:state fader))
+  (set-class! (:bar fader) (str (dommy/class (:bar fader)) " audio-fader"))
+  ;; initialise the states to sync up all that depend on them
   (reset! (:state fader) @(:state fader)))
+
+
+(defn init-cycle! [fader]
+  ;decouple fader from node
+  ;- mousecontrol goes to cycle-node side
+  (add-watch (:state fader)
+             :draw-watcher
+             (fn [key atom old-state new-state]
+                 (draw fader)))
+  (set-class! (:bar fader) (str (dommy/class (:bar fader)) " cycle-fader"))
+  ;; hide it!
+  (set-style! (:bar fader) :background-color "rgba(0,0,0,0.3)")
+  (set-style! (:box fader) :visibility "hidden"))
 
 
 (defn create [fader-state fader-type]
   (let [box (create-element :div)
         bar (create-element :div)
         handle (create-element :div)
-        receive-chan (chan)
         fader {:state fader-state
-               :chan receive-chan
+               :chan (chan)
                :box box
                :bar bar
                :handle handle
                :type fader-type}]  
-    (set-class! box "slider")
+    (set-class! box "slider box")
     (set-class! bar "slider-bar")
     (set-class! handle "slider-handle")
+    (set-attr! box
+               :ondragover "event.preventDefault()") 
     (append! box bar)
     (append! box handle)
     fader))
 
 
-(defn init-bandpass [bp]
-  ;re-draw the faders whenever the state is updated,
-  ; by mouse or by automation
+(defn init-bandpass!
+  "re-draw the faders whenever the state is updated,
+  by mouse or by automation"
+  [bp]
   (add-watch (:state-highpass bp)
              :draw-watcher
              (fn [key atom old-state new-state]
@@ -158,7 +162,7 @@
              :draw-watcher
              (fn [key atom old-state new-state]
                  (draw bp)))
-  ;kick start processes to update the state in response to mouse-move inputs
+  ;; kick start processes to update the state in response to mouse-move inputs
   (go (while true
              (let [new-level (<! (:chan-highpass bp))
                    highpass-max (- @(:state-lowpass bp) bandpass-min-bandwidth)]
@@ -171,12 +175,12 @@
                (if (> new-level lowpass-min)
                  (reset! (:state-lowpass bp) new-level)
                  (reset! (:state-lowpass bp) lowpass-min)))))
-  ;kick start processes to listen for mouse inputs
-  (mouse-control (:handle-highpass bp) (:state-highpass bp) (:chan-highpass bp))
-  (mouse-control (:handle-lowpass bp) (:state-lowpass bp) (:chan-lowpass bp))
-  (mouse-control (:bar bp) (:state-highpass bp) (:chan-highpass bp))
-  (mouse-control (:bar bp) (:state-lowpass bp) (:chan-lowpass bp))
-  ;initialise the states to sync up all that depend on them
+  ;; kick start processes to listen for mouse inputs
+  (mouse-control! (:handle-highpass bp) (:state-highpass bp) (:chan-highpass bp))
+  (mouse-control! (:handle-lowpass bp) (:state-lowpass bp) (:chan-lowpass bp))
+  (mouse-control! (:bar bp) (:state-highpass bp) (:chan-highpass bp))
+  (mouse-control! (:bar bp) (:state-lowpass bp) (:chan-lowpass bp))
+  ;; initialise the states to sync up all that depend on them
   (reset! (:state-highpass bp) @(:state-highpass bp))
   (reset! (:state-lowpass bp) @(:state-lowpass bp)))
 
@@ -203,7 +207,7 @@
             :handle-highpass handle-highpass
             :handle-lowpass handle-lowpass 
             :type :Bandpass}]
-    (set-class! box "bandpass")
+    (set-class! box "bandpass box")
     (set-class! bar "bandpass-bar")
     (set-class! bar-upper "bandpass-bar-upper")
     (set-class! bar-lower "bandpass-bar-lower")

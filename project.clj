@@ -1,8 +1,8 @@
 (defproject modal-synth "0.1.0-SNAPSHOT"
   :description "Modal synthesis for experimental music"
   :url "subtleblank.com"
-  :license {:name "Creative Commons Attribution 4.0 International"
-            :url "https://creativecommons.org/licenses/by/4.0"}
+  :license {:name "MIT License"
+            :url "https://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/clojurescript "1.9.229"]
                  [prismatic/dommy "1.1.0"]
@@ -32,8 +32,7 @@
                                    :output-to "resources/public/js/modal-synth.js"
                                    :output-dir "resources/public/js/min"
                                    :optimizations :advanced
-                                   :pretty-print false } }
-                       ]}
+                                   :pretty-print false } }]}
   :figwheel {
              :http-server-root "public" ;; this will be in resources/
              ;:server-port 5309          ;; default is 3449

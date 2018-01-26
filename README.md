@@ -1,9 +1,9 @@
 # modal-synth
 
-Modal synthesis represented as coupled feedback loops.
+Less modal-synthesis and more noisy-feedback no-input-mixing distorted-grinding.
 
-(soon to be) Live at www.subtleblank.com
+Live at www.subtleblank.com
 
 ## License
 
-CC BY 4.0
+MIT

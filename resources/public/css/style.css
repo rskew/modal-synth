@@ -1,14 +1,29 @@
 :root {
     --channel-height: 110px;
     --slider-width: 50vw;
+    --cycle-node-radius: 5px;
+}
+
+body, div
+{
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: -moz-none;
+    -ms-user-select: none;
+    -o-user-select: none;
+    user-select: none;
 }
 
 .divider {
     position: absolute;
     margin: 12px;
-    width: var(--slider-width);
+    width: calc(var(--slider-width) + 40px);
     height: 7px;
-    background-color: #EEEEEE;
+    background-color: #777777;
+    /*
+    visibility: hidden;
+    */
 }
 
 #divider1 {
@@ -32,16 +47,20 @@
 }
 
 #channel1 {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: 0;
     width: var(--slider-width);
 }
 
 #channel2 {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: var(--channel-height);
     margin: 2px 0 0 0;
@@ -49,8 +68,10 @@
 }
 
 #channel3 {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: calc(2 * var(--channel-height));
     margin: 2px 0 0 0;
@@ -58,8 +79,10 @@
 }
 
 #channel4 {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: calc(3 * var(--channel-height));
     margin: 2px 0 0 0;
@@ -67,8 +90,10 @@
 }
 
 #channel-master {
-    /*position: relative;*/
     position: absolute;
+    /*
+    position: relative;
+    */
     left: 0;
     top: calc(90vh - var(--channel-height));
     width: var(--slider-width);
@@ -85,8 +110,10 @@
 
 .slider-bar {
   position: absolute;
-  background-color: black;
+  background-color: rgba(50,130,200,0.6);
+  /*
   z-index: 0;
+  */
   width: 50px;
   height: 20px;
 }
@@ -94,9 +121,11 @@
 .slider-handle {
   width: 40px;
   height: 20px;
-  background-color: #777777;
+  background-color: rgba(119,119,119,0.6);
   position: absolute;
+  /*
   z-index: 10;
+  */
   left: 0;
   top: 0;
   border: 0 none;
@@ -115,12 +144,12 @@
   top: 0;
   border: 5px 20px 5px 20px;
   margin: 5px 20px 5px 20px;
-  width: calc(30px + var(--fader-width));
+  width: calc(30px + var(--slider-width));
 }
 
 .bandpass-bar {
   position: absolute;
-  z-index: 0;
+  z-index: 10;
   left: 0px;
   width: 50px;
   height: 30px;
@@ -129,20 +158,28 @@
 
 .bandpass-bar-upper {
     position: absolute;
+    /*
     background-color: black;
+    */
+    background-color: rgba(0,0,0,0.2);
     left: 0px;
     width: inherit;
     height: 20px;
+    z-index: 20;
 }
 
 .bandpass-bar-lower {
     position: absolute;
+    /*
     background-color: black;
+    */
+    background-color: rgba(0,0,0,0.2);
     left: 0px;
     top: 20px;
     width: calc(100% - 16px);
     height: 10px;
     margin: 0 8px 0 8px;
+    z-index: 20;
 }
 
 .bandpass-handle-highpass {
@@ -161,7 +198,10 @@
 
 .bandpass-handle-highpass-vert {
     position: absolute;
+    /*
     background-color: #777777;
+    */
+    background-color: rgba(120,120,120,0.2);
     z-index: 20;
     width: 100%;
     height: 100%
@@ -169,7 +209,10 @@
 
 .bandpass-handle-highpass-horiz {
     position: absolute;
+    /*
     background-color: #777777;
+    */
+    background-color: rgba(120,120,120,0.2);
     z-index: 20;
     width: 8px;
     left: 100%;
@@ -193,7 +236,10 @@
 
 .bandpass-handle-lowpass-vert {
     position: absolute;
+    /*
     background-color: #777777;
+    */
+    background-color: rgba(120,120,120,0.2);
     z-index: 20;
     width: 100%;
     height: 100%
@@ -201,10 +247,58 @@
 
 .bandpass-handle-lowpass-horiz {
     position: absolute;
+    /*
     background-color: #777777;
+    */
+    background-color: rgba(120,120,120,0.2);
     z-index: 20;
     width: 8px;
     left: calc(100% - 20px);
     height: 9px;
     top: 21px;
+}
+
+.spectrum-vis {
+  position: absolute;
+  /*
+  z-index: 0;
+  */
+  height: 30px;
+  width: calc(var(--slider-width) - 28px);
+  visibility: hidden;
+}
+
+.cycle-channel {
+    position: absolute;
+    z-index: -5;
+}
+
+#cycles {
+    position: absolute;
+    height: 900px;
+    width: 500px;
+    left: calc(var(--slider-width) + 100px);
+    top: 10px;
+    display: table;
+    border-spacing: 5px 0px;
+}
+
+.cycle {
+}
+
+.node-div {
+}
+
+.controls-div {
+    display: table-row;
+}
+
+.cycle-node {
+    position: relative;
+    display: table-cell;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    background-color: rgba(0,0,0,0.2);
+    border: 1px solid white;
 }
