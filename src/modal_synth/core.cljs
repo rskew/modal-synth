@@ -23,7 +23,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn init-channels! []
   (defonce channel1-audio (channel/make-channel-audio audio-context))
-  (defonce channel1-state (channel/init-channel-state! 0.2 0.46 0 1
+  (defonce channel1-state (channel/init-channel-state! 1 0.46 0 1
                                                        channel1-audio))
   (def channel1 (channel-dom/create! (:gain channel1-state)
                                      (:delay-time channel1-state)
@@ -193,7 +193,7 @@
     (set-attr! cycles-div :id "cycles")
     (append! (sel1 :body) cycles-div)
     (defonce cycle1 (cycles/create {:x 10 :y 10}
-                                   7
+                                   5
                                    audio-fader1
                                    cycle-fader1
                                    drag-and-drop-cycle
@@ -236,7 +236,9 @@
   (connect-audio-nodes!)
   (init-keyboard-control!)
   (init-scheduler!)
-  (init-cycles!))
+  (init-cycles!)
+  (reset! (:state (nth @(:nodes cycle1) 0)) 0)
+  (reset! (:state (nth @(:nodes cycle1) 1)) 1))
 
 (.addEventListener
  js/window

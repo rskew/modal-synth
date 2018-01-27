@@ -83,4 +83,4 @@ return channel_state;
 }
 });
 
-//# sourceMappingURL=channel.js.map?rel=1516956393871
+//# sourceMappingURL=channel.js.map?rel=1517065385451

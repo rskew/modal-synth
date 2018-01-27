@@ -87,4 +87,4 @@ dommy.core.set_attr_BANG_.call(null,divider_element,new cljs.core.Keyword(null,"
 return divider_element;
 });
 
-//# sourceMappingURL=channel_dom.js.map?rel=1516956393795
+//# sourceMappingURL=channel_dom.js.map?rel=1517065385324
