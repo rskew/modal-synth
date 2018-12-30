@@ -11,3 +11,6 @@ pom.xml.asc
 .hg/
 *.sw*
 ideas
+*.js
+resources/public/js/*
+*.log
